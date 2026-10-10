@@ -1,0 +1,76 @@
+@import "tailwindcss";
+@import "./dark.css";
+@import "./light.css";
+
+@theme inline {
+  --color-app: var(--bg-app);
+  --color-panel: var(--bg-panel);
+  --color-elevated: var(--bg-elevated);
+  --color-canvas: var(--bg-canvas);
+  --color-hover: var(--bg-hover);
+  --color-selected: var(--bg-selected);
+  --color-input: var(--bg-input);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-ink: var(--text);
+  --color-muted: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-on-accent: var(--fg-on-accent);
+  --color-mint: var(--accent-2);
+  --color-danger: var(--danger);
+  --color-warning: var(--warning);
+  --font-sans: Inter, "Segoe UI", "Ubuntu", "Cantarell", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg-app);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow: hidden;
+  user-select: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+input,
+textarea,
+[contenteditable='true'] {
+  user-select: text;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+}
+
+.pixel-grid {
+  background-image:
+    linear-gradient(to right, #ffffff10 1px, transparent 1px),
+    linear-gradient(to bottom, #ffffff10 1px, transparent 1px);
+  background-size: var(--cell, 6px) var(--cell, 6px);
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}

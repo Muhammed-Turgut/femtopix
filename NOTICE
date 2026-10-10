@@ -1,0 +1,21 @@
+ivec draw
+Copyright 2026 ivec
+
+This product includes software developed for the ivec draw project.
+
+Ported third-party code
+-----------------------
+No modules have been ported yet.
+
+Future ports from sbrin/lopaka (https://github.com/sbrin/lopaka),
+licensed under the Apache License, Version 2.0, will be listed here
+with file-level attribution as they are added:
+
+  - platform code generators and templates
+  - source parsers
+  - pixelated drawing renderer algorithms
+  - BDF / GFX / TTF font parsers and bdf2gfx
+  - display profile list
+  - layer-property-capabilities
+
+The original NOTICE and LICENSE of any ported work will be preserved.
