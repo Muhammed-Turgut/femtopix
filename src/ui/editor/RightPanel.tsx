@@ -7,16 +7,22 @@ import {
   AlignStartVertical,
   Eye,
   EyeOff,
+  FlipHorizontal2,
+  FlipVertical2,
   Lock,
   LockOpen,
   Square,
-  UnfoldHorizontal
+  UnfoldHorizontal,
+  UnfoldVertical
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { DEVICE_PROFILES, listSelectableProfiles } from '@/core/devices/profiles'
 import type { ColorMode, ExportTarget } from '@/core/document/model'
 import { currentScreen, useAppStore } from '@/store/app-store'
 import {
+  alignSelection,
+  distributeSelection,
+  flipSelection,
   libraryLabel,
   patchNode,
   renameNode,
@@ -26,18 +32,19 @@ import {
   setDeviceMode,
   setDeviceProfile,
   setScreenSize,
-  toggleNodeFlag
+  toggleNodeFlag,
+  type AlignKey
 } from '@/ui/editor/document-actions'
-import { cssHexFromColor, isColorDisplay } from '@/core/color/rgb565'
+import { cssHexFromColor } from '@/core/color/rgb565'
 import { ColorField, Field, IconButton, Input, NumberInput, Section, Select, Switch, Tooltip } from '@/ui/primitives'
 
-const ALIGN = [
-  { Icon: AlignStartHorizontal, key: 'startX' },
-  { Icon: AlignCenterHorizontal, key: 'centerX' },
-  { Icon: AlignEndHorizontal, key: 'endX' },
-  { Icon: AlignStartVertical, key: 'startY' },
-  { Icon: AlignCenterVertical, key: 'centerY' },
-  { Icon: AlignEndVertical, key: 'endY' }
+const ALIGN: { Icon: typeof AlignStartHorizontal; key: AlignKey; label: 'alignLeft' | 'alignCenterX' | 'alignRight' | 'alignTop' | 'alignCenterY' | 'alignBottom' }[] = [
+  { Icon: AlignStartHorizontal, key: 'startX', label: 'alignLeft' },
+  { Icon: AlignCenterHorizontal, key: 'centerX', label: 'alignCenterX' },
+  { Icon: AlignEndHorizontal, key: 'endX', label: 'alignRight' },
+  { Icon: AlignStartVertical, key: 'startY', label: 'alignTop' },
+  { Icon: AlignCenterVertical, key: 'centerY', label: 'alignCenterY' },
+  { Icon: AlignEndVertical, key: 'endY', label: 'alignBottom' }
 ]
 
 export function RightPanel() {
@@ -50,9 +57,47 @@ export function RightPanel() {
 
   if (!document || !screen) return null
 
+  const arrangeBar = selectedIds.length > 0 ? (
+    <div className="flex h-8 items-center gap-0.5 border-b border-line px-2">
+      {ALIGN.map(({ Icon, key, label }) => (
+        <Tooltip key={key} content={t(`editor.${label}`)}>
+          <IconButton aria-label={t(`editor.${label}`)} onClick={() => alignSelection(key)}>
+            <Icon size={16} strokeWidth={1.5} />
+          </IconButton>
+        </Tooltip>
+      ))}
+      <div className="mx-0.5 h-4 w-px bg-line" />
+      <Tooltip content={t('editor.distributeH')}>
+        <IconButton aria-label={t('editor.distributeH')} onClick={() => distributeSelection('x')}>
+          <UnfoldHorizontal size={16} strokeWidth={1.5} />
+        </IconButton>
+      </Tooltip>
+      <Tooltip content={t('editor.distributeV')}>
+        <IconButton aria-label={t('editor.distributeV')} onClick={() => distributeSelection('y')}>
+          <UnfoldVertical size={16} strokeWidth={1.5} />
+        </IconButton>
+      </Tooltip>
+      <div className="mx-0.5 h-4 w-px bg-line" />
+      <Tooltip content={t('editor.flipH')}>
+        <IconButton aria-label={t('editor.flipH')} onClick={() => flipSelection('x')}>
+          <FlipHorizontal2 size={16} strokeWidth={1.5} />
+        </IconButton>
+      </Tooltip>
+      <Tooltip content={t('editor.flipV')}>
+        <IconButton aria-label={t('editor.flipV')} onClick={() => flipSelection('y')}>
+          <FlipVertical2 size={16} strokeWidth={1.5} />
+        </IconButton>
+      </Tooltip>
+    </div>
+  ) : null
+
   if (selectedIds.length === 0 || !node) {
     return (
       <div className="scrollbar-thin h-full overflow-auto bg-panel">
+        {arrangeBar}
+        {selectedIds.length > 1 ? (
+          <div className="border-b border-line px-3 py-2 text-[12px] text-muted">{t('editor.selectedCount', { count: selectedIds.length })}</div>
+        ) : null}
         <Section title={t('editor.screen')}>
           <Field label={t('editor.name')}>
             <Input
@@ -117,27 +162,13 @@ export function RightPanel() {
     )
   }
 
-  const color = node.color
-  const invert = color === 'invert'
-  const colorDisplay = isColorDisplay(document.device.colorMode)
+  const invert = node.color === 'invert' || node.strokeColor === 'invert'
+  const canFill = node.type === 'rect' || node.type === 'ellipse' || node.type === 'triangle' || node.type === 'polygon' || node.type === 'arc'
+  const canStroke = canFill || node.type === 'line' || node.type === 'polyline' || node.type === 'paint'
 
   return (
     <div className="scrollbar-thin h-full overflow-auto bg-panel">
-      <div className="flex h-8 items-center gap-0.5 border-b border-line px-2">
-        {ALIGN.map(({ Icon, key }) => (
-          <Tooltip key={key} content={t('editor.align')}>
-            <IconButton>
-              <Icon size={16} strokeWidth={1.5} />
-            </IconButton>
-          </Tooltip>
-        ))}
-        <div className="mx-0.5 h-4 w-px bg-line" />
-        <Tooltip content={t('editor.distribute')}>
-          <IconButton>
-            <UnfoldHorizontal size={16} strokeWidth={1.5} />
-          </IconButton>
-        </Tooltip>
-      </div>
+      {arrangeBar}
       <Section title={t('editor.layer')}>
         <div className="flex h-7 items-center gap-1">
           {node.role === 'reference' ? (
@@ -165,55 +196,62 @@ export function RightPanel() {
         </div>
       </Section>
       <Section title={t('editor.appearance')}>
-        {colorDisplay ? (
+        {canFill ? (
+          <>
+            <Switch
+              checked={Boolean(node.fill)}
+              onChange={(fill) => patchNode(screen.id, node.id, (item) => { item.fill = fill })}
+              label={t('editor.fill')}
+            />
+            <Field label={t('editor.fillColor')}>
+              <ColorField
+                value={cssHexFromColor(node.color)}
+                onChange={(hex) => patchNode(screen.id, node.id, (target) => { target.color = hex })}
+              />
+            </Field>
+          </>
+        ) : !canStroke ? (
           <Field label={t('editor.color')}>
             <ColorField
-              value={cssHexFromColor(color)}
+              value={cssHexFromColor(node.color)}
               onChange={(hex) => patchNode(screen.id, node.id, (target) => { target.color = hex })}
             />
           </Field>
-        ) : (
-          <div className="flex gap-1">
-            {[
-              { id: 1, label: t('editor.colorOn') },
-              { id: 0, label: t('editor.colorOff') },
-              { id: 'invert', label: t('editor.invert') }
-            ].map((item) => {
-              const active = item.id === 'invert' ? invert : color === item.id
-              return (
-                <button
-                  key={String(item.id)}
-                  type="button"
-                  onClick={() => patchNode(screen.id, node.id, (target) => { target.color = item.id })}
-                  className={`h-6 rounded px-2 text-[11px] ${
-                    active ? 'bg-accent text-on-accent' : 'bg-elevated text-ink hover:bg-hover'
-                  }`}
-                >
-                  {item.label}
-                </button>
-              )
-            })}
-          </div>
-        )}
-        <Switch
-          checked={Boolean(node.fill)}
-          onChange={(fill) => patchNode(screen.id, node.id, (item) => { item.fill = fill })}
-          label={t('editor.fill')}
-        />
-        <Switch
-          checked={(node.stroke ?? 0) > 0}
-          onChange={(on) => patchNode(screen.id, node.id, (item) => { item.stroke = on ? item.stroke || 1 : 0 })}
-          label={t('editor.stroke')}
-        />
-        {(node.stroke ?? 0) > 0 ? (
-          <NumberInput
-            label="px"
-            value={node.stroke ?? 1}
-            min={1}
-            max={16}
-            onChange={(stroke) => patchNode(screen.id, node.id, (item) => { item.stroke = stroke })}
-          />
         ) : null}
+        {canStroke ? (
+          <>
+            <Switch
+              checked={(node.stroke ?? 0) > 0}
+              onChange={(on) => patchNode(screen.id, node.id, (item) => { item.stroke = on ? item.stroke || 1 : 0 })}
+              label={t('editor.stroke')}
+            />
+            <Field label={t('editor.strokeColor')}>
+              <ColorField
+                value={cssHexFromColor(node.strokeColor ?? node.color)}
+                onChange={(hex) => patchNode(screen.id, node.id, (target) => { target.strokeColor = hex })}
+              />
+            </Field>
+            {(node.stroke ?? 0) > 0 ? (
+              <NumberInput
+                label="px"
+                value={node.stroke ?? 1}
+                min={1}
+                max={16}
+                onChange={(stroke) => patchNode(screen.id, node.id, (item) => { item.stroke = stroke })}
+              />
+            ) : null}
+          </>
+        ) : null}
+        <Switch
+          checked={invert}
+          onChange={(on) =>
+            patchNode(screen.id, node.id, (item) => {
+              item.color = on ? 'invert' : 1
+              item.strokeColor = on ? 'invert' : 1
+            })
+          }
+          label={t('editor.invert')}
+        />
       </Section>
       {node.type === 'text' ? (
         <Section title={t('editor.text')}>
@@ -233,13 +271,6 @@ export function RightPanel() {
       {node.type === 'image' ? (
         <Section title={t('editor.image')}>
           <div className="text-[12px] text-ink">{node.asset ?? t('editor.emptyAssetsTitle')}</div>
-          {colorDisplay ? null : (
-            <Switch
-              checked={invert}
-              onChange={(on) => patchNode(screen.id, node.id, (item) => { item.color = on ? 'invert' : 1 })}
-              label={t('editor.invert')}
-            />
-          )}
         </Section>
       ) : null}
       <Section title={t('editor.code')}>

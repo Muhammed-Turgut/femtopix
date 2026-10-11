@@ -1,8 +1,9 @@
-import type { SceneNode } from '@/core/document/model'
+import type { SceneNode, Screen } from '@/core/document/model'
 import { currentScreen, useAppStore } from '@/store/app-store'
-import { patchDocument, removeNodes, setSelectedIds } from '@/ui/editor/document-actions'
+import { duplicateScreen, pasteScreenClone, patchDocument, removeNodes, removeScreen, setSelectedIds } from '@/ui/editor/document-actions'
 
 let layerClipboard: SceneNode[] = []
+let screenClipboard: Screen | null = null
 
 export function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false
@@ -23,7 +24,26 @@ export function copySelection(): boolean {
   const screen = currentScreen(document, activeScreenId)
   if (!screen || selectedIds.length === 0) return false
   layerClipboard = screen.children.filter((node) => selectedIds.includes(node.id)).map((node) => structuredClone(node))
+  screenClipboard = null
   return layerClipboard.length > 0
+}
+
+export function copyActiveScreen(): boolean {
+  const { document, activeScreenId } = useAppStore.getState()
+  const screen = currentScreen(document, activeScreenId)
+  if (!screen) return false
+  screenClipboard = structuredClone(screen)
+  layerClipboard = []
+  return true
+}
+
+export function duplicateSelection(): void {
+  if (copySelection()) {
+    pasteClipboard()
+    return
+  }
+  const id = useAppStore.getState().activeScreenId
+  if (id) duplicateScreen(id)
 }
 
 export function cutSelection(): void {
@@ -35,7 +55,11 @@ export function cutSelection(): void {
 
 export function pasteClipboard(): void {
   const { activeScreenId } = useAppStore.getState()
-  if (!activeScreenId || layerClipboard.length === 0) return
+  if (layerClipboard.length === 0) {
+    if (screenClipboard) pasteScreenClone(screenClipboard)
+    return
+  }
+  if (!activeScreenId) return
   const nodes = layerClipboard.map((node) => ({
     ...structuredClone(node),
     id: newNodeId(),
@@ -84,8 +108,16 @@ export function runEditCommand(command: 'undo' | 'redo' | 'copy' | 'cut' | 'past
   if (command === 'copy' && hasTextSelection()) return
   if (command === 'undo') useAppStore.getState().undo()
   if (command === 'redo') useAppStore.getState().redo()
-  if (command === 'copy') copySelection()
-  if (command === 'cut') cutSelection()
+  if (command === 'copy') {
+    if (!copySelection()) copyActiveScreen()
+  }
+  if (command === 'cut') {
+    if (useAppStore.getState().selectedIds.length) cutSelection()
+    else {
+      const id = useAppStore.getState().activeScreenId
+      if (copyActiveScreen() && id) removeScreen(id)
+    }
+  }
   if (command === 'paste') pasteClipboard()
   if (command === 'selectAll') selectAllLayers()
 }
@@ -112,19 +144,42 @@ export function handleEditKey(event: KeyboardEvent): boolean {
   if (mod && key === 'c') {
     if (hasTextSelection()) return false
     event.preventDefault()
-    copySelection()
+    if (!copySelection()) copyActiveScreen()
     return true
   }
   if (mod && key === 'x') {
     if (hasTextSelection()) return false
     event.preventDefault()
-    cutSelection()
+    if (useAppStore.getState().selectedIds.length) cutSelection()
+    else {
+      const id = useAppStore.getState().activeScreenId
+      if (copyActiveScreen() && id) removeScreen(id)
+    }
     return true
   }
   if (mod && key === 'v') {
     event.preventDefault()
     pasteClipboard()
     return true
+  }
+  if (mod && key === 'd') {
+    event.preventDefault()
+    duplicateSelection()
+    return true
+  }
+  if (event.key === 'Delete' || event.key === 'Backspace') {
+    const { activeScreenId, selectedIds, document } = useAppStore.getState()
+    if (selectedIds.length && activeScreenId) {
+      event.preventDefault()
+      removeNodes(activeScreenId, selectedIds)
+      return true
+    }
+    if (activeScreenId && (document?.screens.length ?? 0) > 1) {
+      event.preventDefault()
+      removeScreen(activeScreenId)
+      return true
+    }
+    return false
   }
   if (mod && key === 'a') {
     event.preventDefault()

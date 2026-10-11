@@ -21,6 +21,9 @@
   --danger: #ff5c7a;
   --warning: #ffb54c;
   --code-comment: #8a8a8a;
-  --code-keyword: #c8c8c8;
+  --code-keyword: var(--accent);
+  --code-fn: #f0c14d;
+  --code-number: #d19a66;
+  --code-type: #7eb8ff;
   --code-string: #18d9c5;
 }

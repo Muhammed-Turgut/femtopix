@@ -111,7 +111,7 @@ export function DeviceRaster({
         g = snapped.g
         b = snapped.b
       }
-      if (!color) {
+      if (!color && r === 255 && g === 255 && b === 255) {
         r = mono.r
         g = mono.g
         b = mono.b

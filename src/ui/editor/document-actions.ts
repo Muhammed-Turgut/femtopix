@@ -1,10 +1,20 @@
 import { cssHexFromColor, inkRgb, isColorDisplay } from '@/core/color/rgb565'
-import { placeholderCode, toCIdentifier, type ColorMode, type ExportTarget, type IvecDocument, type SceneNode } from '@/core/document/model'
+import {
+  alignedPosition,
+  boxesOf,
+  distributedPositions,
+  flippedOrigin,
+  unionBox,
+  type AlignKey
+} from '@/core/document/arrange'
+import { placeholderCode, toCIdentifier, type ColorMode, type ExportTarget, type IvecDocument, type SceneNode, type Screen } from '@/core/document/model'
 import { getProfile } from '@/core/devices/profiles'
 import { formatXbmHeader, packXbm } from '@/core/export/xbm'
 import { rgbaToMono, type MonoBitmap } from '@/core/render/draw-node'
 import { nodeBounds, rasterizeNode } from '@/core/render/raster-node'
-import { useAppStore } from '@/store/app-store'
+import { currentScreen, useAppStore } from '@/store/app-store'
+
+export type { AlignKey }
 
 export function patchDocument(recipe: (document: IvecDocument) => void, options?: { record?: boolean }): void {
   if (options?.record !== false) useAppStore.getState().pushHistory()
@@ -27,6 +37,80 @@ export function renameScreen(id: string, name: string): void {
     const screen = document.screens.find((item) => item.id === id)
     if (screen) screen.name = name
   })
+}
+
+function nextId(prefix: string): string {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+}
+
+function cloneNodes(nodes: SceneNode[]): SceneNode[] {
+  return nodes.map((node) => ({
+    ...structuredClone(node),
+    id: nextId('n'),
+    children: node.children ? cloneNodes(node.children) : undefined
+  }))
+}
+
+function uniqueScreenName(base: string, names: string[]): string {
+  if (!names.includes(base)) return base
+  let index = 2
+  while (names.includes(`${base} ${index}`)) index += 1
+  return `${base} ${index}`
+}
+
+function screenFromClone(source: Screen, document: IvecDocument, name: string): Screen {
+  const used = new Set(document.screens.map((item) => item.cIdentifier))
+  return {
+    ...structuredClone(source),
+    id: nextId('s'),
+    name,
+    cIdentifier: toCIdentifier(name, used),
+    x: source.x + document.device.width + 24,
+    y: source.y,
+    children: cloneNodes(source.children)
+  }
+}
+
+export function duplicateScreen(id: string): string | null {
+  const { document, locale } = useAppStore.getState()
+  const source = document?.screens.find((item) => item.id === id)
+  if (!document || !source) return null
+  const suffix = locale === 'en' ? 'copy' : 'kopya'
+  const name = uniqueScreenName(`${source.name} ${suffix}`, document.screens.map((item) => item.name))
+  const screen = screenFromClone(source, document, name)
+  patchDocument((project) => {
+    project.screens.push(screen)
+  })
+  useAppStore.setState({ activeScreenId: screen.id, selectedIds: [] })
+  return screen.id
+}
+
+export function removeScreen(id: string): boolean {
+  const document = useAppStore.getState().document
+  if (!document || document.screens.length <= 1) return false
+  const index = document.screens.findIndex((item) => item.id === id)
+  if (index < 0) return false
+  patchDocument((project) => {
+    project.screens = project.screens.filter((item) => item.id !== id)
+  })
+  const next = useAppStore.getState().document
+  const fallback = next?.screens[Math.min(index, (next?.screens.length ?? 1) - 1)]
+  useAppStore.setState({ activeScreenId: fallback?.id ?? null, selectedIds: [] })
+  return true
+}
+
+export function pasteScreenClone(source: Screen): string | null {
+  const document = useAppStore.getState().document
+  if (!document) return null
+  const locale = useAppStore.getState().locale
+  const suffix = locale === 'en' ? 'copy' : 'kopya'
+  const name = uniqueScreenName(`${source.name} ${suffix}`, document.screens.map((item) => item.name))
+  const screen = screenFromClone(source, document, name)
+  patchDocument((project) => {
+    project.screens.push(screen)
+  })
+  useAppStore.setState({ activeScreenId: screen.id, selectedIds: [] })
+  return screen.id
 }
 
 export function setDeviceProfile(profileId: string): void {
@@ -54,16 +138,22 @@ export function setDeviceLibrary(library: ExportTarget): void {
   })
 }
 
-function convertNodeColor(node: SceneNode, mode: ColorMode): void {
+function convertColor(color: SceneNode['color'], mode: ColorMode): SceneNode['color'] {
   if (isColorDisplay(mode)) {
-    if (node.color === 1 || node.color === '1' || node.color === 'invert') node.color = '#FFFFFF'
-    else if (node.color === 0 || node.color === '0') node.color = '#000000'
-    else if (typeof node.color === 'string' && node.color.startsWith('#')) node.color = cssHexFromColor(node.color)
-    return
+    if (color === 1 || color === '1' || color === 'invert') return '#FFFFFF'
+    if (color === 0 || color === '0') return '#000000'
+    if (typeof color === 'string' && color.startsWith('#')) return cssHexFromColor(color)
+    return color
   }
-  if (typeof node.color === 'string' && node.color.startsWith('#')) {
-    node.color = inkRgb(node) === 0 ? 0 : 1
+  if (typeof color === 'string' && color.startsWith('#')) {
+    return inkRgb({ color }) === 0 ? 0 : 1
   }
+  return color
+}
+
+function convertNodeColor(node: SceneNode, mode: ColorMode): void {
+  node.color = convertColor(node.color, mode)
+  if (node.strokeColor !== undefined) node.strokeColor = convertColor(node.strokeColor, mode)
 }
 
 export function setDeviceMode(mode: ColorMode): void {
@@ -216,6 +306,75 @@ export function selectedNode(): SceneNode | null {
   return screen?.children.find((item) => item.id === selectedIds[0]) ?? null
 }
 
+function selectedUnlocked(): { screenId: string; nodes: SceneNode[] } | null {
+  const { document, selectedIds, activeScreenId } = useAppStore.getState()
+  const screen = currentScreen(document, activeScreenId)
+  if (!document || !screen || selectedIds.length === 0) return null
+  const nodes = screen.children.filter((node) => selectedIds.includes(node.id) && !node.locked)
+  if (!nodes.length) return null
+  return { screenId: screen.id, nodes }
+}
+
+function moveNodeBox(node: SceneNode, from: { x: number; y: number }, to: { x: number; y: number }): void {
+  node.x = Math.round(node.x + (to.x - from.x))
+  node.y = Math.round(node.y + (to.y - from.y))
+}
+
+export function alignSelection(key: AlignKey): void {
+  const selected = selectedUnlocked()
+  const document = useAppStore.getState().document
+  if (!selected || !document) return
+  const boxes = boxesOf(selected.nodes)
+  const frame =
+    boxes.length === 1
+      ? { id: 'screen', x: 0, y: 0, w: document.device.width, h: document.device.height }
+      : unionBox(boxes)
+  patchDocument((project) => {
+    const screen = project.screens.find((item) => item.id === selected.screenId)
+    if (!screen) return
+    for (const box of boxes) {
+      const node = screen.children.find((item) => item.id === box.id)
+      if (!node) continue
+      moveNodeBox(node, box, alignedPosition(box, frame, key))
+    }
+  })
+}
+
+export function distributeSelection(axis: 'x' | 'y'): void {
+  const selected = selectedUnlocked()
+  if (!selected || selected.nodes.length < 3) return
+  const next = distributedPositions(boxesOf(selected.nodes), axis)
+  patchDocument((project) => {
+    const screen = project.screens.find((item) => item.id === selected.screenId)
+    if (!screen) return
+    for (const box of boxesOf(selected.nodes)) {
+      const node = screen.children.find((item) => item.id === box.id)
+      const target = next.find((item) => item.id === box.id)
+      if (!node || !target) continue
+      moveNodeBox(node, box, target)
+    }
+  })
+}
+
+export function flipSelection(axis: 'x' | 'y'): void {
+  const selected = selectedUnlocked()
+  if (!selected) return
+  const boxes = boxesOf(selected.nodes)
+  const frame = boxes.length === 1 ? boxes[0] : unionBox(boxes)
+  if (!frame) return
+  patchDocument((project) => {
+    const screen = project.screens.find((item) => item.id === selected.screenId)
+    if (!screen) return
+    for (const box of boxes) {
+      const node = screen.children.find((item) => item.id === box.id)
+      if (!node) continue
+      moveNodeBox(node, box, flippedOrigin(box, frame, axis))
+      if (axis === 'x') node.flipX = !node.flipX
+      else node.flipY = !node.flipY
+    }
+  })
+}
+
 export function addNode(screenId: string, node: SceneNode): void {
   patchDocument((document) => {
     const screen = document.screens.find((item) => item.id === screenId)
@@ -278,6 +437,8 @@ export function createNode(
   const mode = useAppStore.getState().document?.device.colorMode
   let color: SceneNode['color'] = extra?.color ?? (isColorDisplay(mode) ? '#FFFFFF' : 1)
   if (isColorDisplay(mode) && (color === 1 || color === '1')) color = '#FFFFFF'
+  let strokeColor: SceneNode['color'] = extra?.strokeColor ?? color
+  if (isColorDisplay(mode) && (strokeColor === 1 || strokeColor === '1')) strokeColor = '#FFFFFF'
   return {
     id: `n_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     type,
@@ -291,7 +452,8 @@ export function createNode(
     fill: false,
     stroke: outline ? 1 : 0,
     ...extra,
-    color
+    color,
+    strokeColor
   }
 }
 

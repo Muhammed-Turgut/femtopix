@@ -60,6 +60,7 @@ export interface SceneNode {
   visible: boolean
   locked: boolean
   color: number | string
+  strokeColor?: number | string
   role?: 'normal' | 'reference'
   vars?: Record<string, string>
   children?: SceneNode[]
@@ -69,6 +70,8 @@ export interface SceneNode {
   stroke?: number
   asset?: string
   opacity?: number
+  flipX?: boolean
+  flipY?: boolean
 }
 
 export interface Screen {
@@ -128,6 +131,7 @@ const nodeSchema: z.ZodType<SceneNode> = z.lazy(() =>
     visible: z.boolean(),
     locked: z.boolean(),
     color: z.union([z.number(), z.string()]),
+    strokeColor: z.union([z.number(), z.string()]).optional(),
     role: z.enum(['normal', 'reference']).optional(),
     vars: z.record(z.string()).optional(),
     children: z.array(nodeSchema).optional(),
@@ -136,7 +140,9 @@ const nodeSchema: z.ZodType<SceneNode> = z.lazy(() =>
     fill: z.boolean().optional(),
     stroke: z.number().optional(),
     asset: z.string().optional(),
-    opacity: z.number().optional()
+    opacity: z.number().optional(),
+    flipX: z.boolean().optional(),
+    flipY: z.boolean().optional()
   })
 )
 

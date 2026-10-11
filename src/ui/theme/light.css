@@ -20,6 +20,9 @@
   --danger: #e0405e;
   --warning: #d89020;
   --code-comment: #8a8a8a;
-  --code-keyword: #333333;
+  --code-keyword: var(--accent);
+  --code-fn: #b8860b;
+  --code-number: #b86e00;
+  --code-type: #0b6bcb;
   --code-string: #12b8a7;
 }

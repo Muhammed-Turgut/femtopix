@@ -46,11 +46,11 @@ export function EditorScreen({ onSave }: { onSave: () => void }) {
       <PanelGroup direction="vertical" className="min-h-0 flex-1">
         <Panel defaultSize={76} minSize={40}>
           <PanelGroup direction="horizontal" className="h-full">
-            <Panel defaultSize={17} minSize={14} maxSize={25} className="bg-panel" id="left">
+            <Panel defaultSize={18} minSize={12} maxSize={40} className="bg-panel" id="left">
               <LeftPanel />
             </Panel>
             <ResizeRule direction="horizontal" />
-            <Panel minSize={40} className="relative overflow-hidden bg-canvas">
+            <Panel minSize={28} className="relative overflow-hidden bg-canvas">
               <CanvasViewport ref={canvasRef} />
               <Toolbar />
               <div className="absolute right-3 bottom-3 z-10 flex items-center gap-1">
@@ -112,13 +112,13 @@ export function EditorScreen({ onSave }: { onSave: () => void }) {
               </div>
             </Panel>
             <ResizeRule direction="horizontal" />
-            <Panel defaultSize={18} minSize={16} maxSize={22} className="bg-panel" id="right">
+            <Panel defaultSize={18} minSize={12} maxSize={40} className="bg-panel" id="right">
               <RightPanel />
             </Panel>
           </PanelGroup>
         </Panel>
         <ResizeRule direction="vertical" />
-        <Panel defaultSize={26} minSize={14}>
+        <Panel defaultSize={24} minSize={12} maxSize={60}>
           <CodePanel />
         </Panel>
       </PanelGroup>

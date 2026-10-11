@@ -8,6 +8,8 @@ const ROWS = [
   { keys: 'Ctrl+X', label: 'cut' },
   { keys: 'Ctrl+C', label: 'copy' },
   { keys: 'Ctrl+V', label: 'paste' },
+  { keys: 'Ctrl+D', label: 'duplicate' },
+  { keys: 'Del', label: 'delete' },
   { keys: 'Ctrl+A', label: 'selectAll' },
   { keys: 'Shift+↑↓←→', label: 'nudge' },
   { keys: 'Esc', label: 'deselect' },

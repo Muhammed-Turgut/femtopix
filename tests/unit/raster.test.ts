@@ -101,4 +101,41 @@ describe('rgb565', () => {
     expect(at(buffer, 0, 0)).toBe(0xfff80000)
     expect(at(buffer, 2, 1)).toBe(0xfff80000)
   })
+
+  it('paints fill and stroke with different colors', async () => {
+    const { rasterizeNode } = await import('@/core/render/raster-node')
+    const node: SceneNode = {
+      id: 'n3',
+      type: 'rect',
+      name: 'frame',
+      x: 0,
+      y: 0,
+      w: 5,
+      h: 4,
+      visible: true,
+      locked: false,
+      color: '#F80000',
+      strokeColor: '#0000F8',
+      fill: true,
+      stroke: 1
+    }
+    const buffer = rasterizeNode(node)
+    expect(at(buffer, 2, 1)).toBe(0xfff80000)
+    expect(at(buffer, 0, 0)).toBe(0xff0000f8)
+    expect(at(buffer, 4, 3)).toBe(0xff0000f8)
+  })
+})
+
+describe('arrange', () => {
+  it('aligns a box to the right of the frame', async () => {
+    const { alignedPosition } = await import('@/core/document/arrange')
+    const next = alignedPosition({ id: 'a', x: 4, y: 2, w: 8, h: 4 }, { id: 'f', x: 0, y: 0, w: 32, h: 16 }, 'endX')
+    expect(next).toEqual({ x: 24, y: 2 })
+  })
+
+  it('mirrors a box around the frame center', async () => {
+    const { flippedOrigin } = await import('@/core/document/arrange')
+    const next = flippedOrigin({ id: 'a', x: 2, y: 4, w: 6, h: 4 }, { id: 'f', x: 0, y: 0, w: 20, h: 16 }, 'x')
+    expect(next).toEqual({ x: 12, y: 4 })
+  })
 })

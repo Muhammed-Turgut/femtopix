@@ -5,7 +5,8 @@ describe('groupGallery', () => {
   it('groups files by category folder and applies category.json names', () => {
     const categories = groupGallery(
       {
-        '../../../gallery/school-science/dna.png': '/dna.png',
+        '../../../gallery/school-science/dna.svg': '/dna.svg',
+        '../../../gallery/school-science/bag.svg': '/bag.svg',
         '../../../gallery/school-science/bag.png': '/bag.png'
       },
       {
@@ -18,11 +19,22 @@ describe('groupGallery', () => {
 
     expect(categories).toHaveLength(1)
     expect(categories[0]?.name.tr).toBe('Okul ve bilim')
-    expect(categories[0]?.icons.map((icon) => icon.file)).toEqual(['bag.png', 'dna.png'])
+    expect(categories[0]?.icons.map((icon) => icon.file)).toEqual(['bag.svg', 'dna.svg'])
+  })
+
+  it('ignores raster files so only svg icons are listed', () => {
+    const categories = groupGallery(
+      {
+        '../../../gallery/school-science/dna.png': '/dna.png',
+        '../../../gallery/weather/cloud.webp': '/cloud.webp'
+      },
+      {}
+    )
+    expect(categories).toEqual([])
   })
 
   it('titles a folder that has no category.json', () => {
-    const categories = groupGallery({ '../../../gallery/weather/cloud.png': '/cloud.png' }, {})
+    const categories = groupGallery({ '../../../gallery/weather/cloud.svg': '/cloud.svg' }, {})
     expect(categories[0]?.name.en).toBe('Weather')
     expect(categories[0]?.icons[0]?.name).toBe('Cloud')
   })
@@ -56,7 +68,6 @@ describe('loadGallery', () => {
         'phone',
         'photography',
         'romance',
-        'school-science',
         'shopping',
         'social',
         'technology',
@@ -67,20 +78,15 @@ describe('loadGallery', () => {
         'weather'
       ].sort()
     )
-    expect(icons).toBe(662)
+    expect(icons).toBe(658)
+    expect(categories.every((category) => category.icons.every((icon) => icon.file.endsWith('.svg')))).toBe(true)
+    expect(categories.find((category) => category.id === 'school-science')).toBeUndefined()
     expect(categories.find((category) => category.id === 'weather')?.name.tr).toBe('Hava')
     expect(categories.find((category) => category.id === 'weather')?.icons).toHaveLength(10)
   })
 
-  it('reads the school-science icons from disk', () => {
-    const school = loadGallery().find((category) => category.id === 'school-science')
-    expect(school?.name.tr).toBe('Okul ve bilim')
-    expect(school?.icons.map((icon) => icon.file)).toEqual([
-      'bag.png',
-      'dna.png',
-      'graduation-cap.png',
-      'test-flask.png'
-    ])
-    expect(school?.icons.every((icon) => icon.url.length > 0)).toBe(true)
+  it('reads weather svg icons from disk', () => {
+    const weather = loadGallery().find((category) => category.id === 'weather')
+    expect(weather?.icons.every((icon) => icon.file.endsWith('.svg') && icon.url.length > 0)).toBe(true)
   })
 })

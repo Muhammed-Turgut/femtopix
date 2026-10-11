@@ -4,7 +4,10 @@ export function ResizeRule({ direction }: { direction: 'horizontal' | 'vertical'
   const vertical = direction === 'vertical'
   return (
     <PanelResizeHandle
-      className={`group relative z-20 ${vertical ? 'h-1.5 w-full' : 'h-full w-1.5'}`}
+      hitAreaMargins={{ coarse: 20, fine: 8 }}
+      className={`group relative z-30 shrink-0 ${
+        vertical ? 'h-2 w-full cursor-row-resize' : 'h-full w-2 cursor-col-resize'
+      }`}
     >
       <span
         className={`absolute bg-line group-hover:bg-accent group-data-[resize-handle-active]:bg-accent group-data-[resize-handle-state=drag]:bg-accent ${

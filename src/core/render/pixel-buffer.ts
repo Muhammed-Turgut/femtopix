@@ -104,25 +104,39 @@ export class PixelBuffer {
     }
   }
 
-  polygon(points: { x: number; y: number }[], fill: boolean, rgb = 0xffffff): void {
+  polygon(points: { x: number; y: number }[], fill: boolean, rgb = 0xffffff, stroke = true, strokeRgb = rgb): void {
     if (points.length < 2) return
     if (fill) this.fillPolygon(points, rgb)
+    if (!stroke) return
     for (let i = 0; i < points.length; i += 1) {
       const a = points[i]
       const b = points[(i + 1) % points.length]
-      if (a && b) this.line(a.x, a.y, b.x, b.y, rgb)
+      if (a && b) this.line(a.x, a.y, b.x, b.y, strokeRgb)
     }
   }
 
-  blit(src: Uint8Array, srcW: number, srcH: number, x: number, y: number, w: number, h: number, rgb = 0xffffff): void {
+  blit(
+    src: Uint8Array,
+    srcW: number,
+    srcH: number,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    rgb = 0xffffff,
+    flipX = false,
+    flipY = false
+  ): void {
     const dw = Math.max(1, Math.round(w))
     const dh = Math.max(1, Math.round(h))
     const ox = Math.round(x)
     const oy = Math.round(y)
     for (let py = 0; py < dh; py += 1) {
-      const sy = Math.min(srcH - 1, Math.floor((py * srcH) / dh))
+      const sy0 = Math.min(srcH - 1, Math.floor((py * srcH) / dh))
+      const sy = flipY ? srcH - 1 - sy0 : sy0
       for (let px = 0; px < dw; px += 1) {
-        const sx = Math.min(srcW - 1, Math.floor((px * srcW) / dw))
+        const sx0 = Math.min(srcW - 1, Math.floor((px * srcW) / dw))
+        const sx = flipX ? srcW - 1 - sx0 : sx0
         if (src[sy * srcW + sx]) this.set(ox + px, oy + py, rgb)
       }
     }

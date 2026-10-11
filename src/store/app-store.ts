@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
-import { createEmptyDocument, parseDocument, serializeDocument, type ExportTarget, type IvecDocument, type Screen } from '@/core/document/model'
+import { createEmptyDocument, parseDocument, serializeDocument, toCIdentifier, type ExportTarget, type IvecDocument, type Screen } from '@/core/document/model'
 import type { Locale, ResolvedTheme, ThemePreference } from '@/shared/api'
 
 export type ToolId =
@@ -257,10 +257,12 @@ export const useAppStore = create<AppState & AppActions>()(
       set((state) => {
         if (!state.document) return
         const index = state.document.screens.length + 1
+        const used = new Set(state.document.screens.map((item) => item.cIdentifier))
+        const name = `Screen ${index}`
         const screen: Screen = {
           id: `s${index}_${Date.now()}`,
-          name: `Screen ${index}`,
-          cIdentifier: `screen_${index}`,
+          name,
+          cIdentifier: toCIdentifier(name, used),
           x: state.document.screens.length * (state.document.device.width + 24),
           y: 0,
           userCode: { prefix: '', suffix: '' },

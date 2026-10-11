@@ -1,13 +1,49 @@
 import { Check, Copy, Download } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { SceneNode } from '@/core/document/model'
 import { placeholderCode, toCIdentifier } from '@/core/document/model'
 import { nodeBounds } from '@/core/render/raster-node'
 import { currentScreen, useAppStore } from '@/store/app-store'
 import { downloadGeneratedCode, downloadShapeHeader, setExportFlag } from '@/ui/editor/document-actions'
-import { Button, CodeView, IconButton, Switch, Tabs, Tooltip } from '@/ui/primitives'
+import { NodeThumb } from '@/ui/editor/NodeThumb'
+import { Button, CodeView, Switch, Tabs } from '@/ui/primitives'
 
 const FLAGS = ['wrapperFunction', 'includeFonts', 'declareImages', 'comments', 'clearDisplay'] as const
+
+const ICON_TYPES = new Set<SceneNode['type']>(['image'])
+
+function isExportable(node: SceneNode): boolean {
+  return node.visible && node.role !== 'reference'
+}
+
+function HeaderGrid({
+  items,
+  empty,
+  onSave
+}: {
+  items: { node: SceneNode; ident: string }[]
+  empty: string
+  onSave: (node: SceneNode, ident: string) => void
+}) {
+  if (!items.length) return <div className="px-1 py-2 text-[12px] text-muted">{empty}</div>
+  return (
+    <div className="grid grid-cols-4 gap-1 p-1">
+      {items.map((item) => (
+        <button
+          key={item.node.id}
+          type="button"
+          title={`${item.ident}.h`}
+          aria-label={`${item.ident}.h`}
+          onClick={() => onSave(item.node, item.ident)}
+          className="grid aspect-square place-items-center rounded border border-line bg-elevated hover:border-accent"
+        >
+          <NodeThumb node={item.node} />
+        </button>
+      ))}
+    </div>
+  )
+}
 
 export function CodePanel() {
   const { t } = useTranslation()
@@ -18,7 +54,7 @@ export function CodePanel() {
   const layersKey = screen
     ? screen.children
         .map((node) =>
-          [node.id, node.type, node.name, node.x, node.y, node.w, node.h, node.visible, node.color, node.fill, node.stroke, node.text, node.font, node.role].join(':')
+          [node.id, node.type, node.name, node.x, node.y, node.w, node.h, node.visible, node.color, node.strokeColor, node.fill, node.stroke, node.text, node.font, node.role, node.flipX, node.flipY, node.asset].join(':')
         )
         .join('|')
     : ''
@@ -31,14 +67,13 @@ export function CodePanel() {
   if (!project || !screen) return null
 
   const target = project.export.targets[project.export.activeTarget] ?? {}
-  const assets = Array.isArray(project.assets) ? project.assets : []
   const usedIdents = new Set<string>()
-  const shapeHeaders = screen.children
-    .filter((node) => node.visible && node.role !== 'reference')
-    .map((node) => {
-      const { w, h } = nodeBounds(node)
-      return { node, ident: toCIdentifier(node.name, usedIdents), w, h }
-    })
+  const exportable = screen.children.filter(isExportable).map((node) => {
+    const { w, h } = nodeBounds(node)
+    return { node, ident: toCIdentifier(node.name, usedIdents), w, h }
+  })
+  const shapes = exportable.filter((item) => !ICON_TYPES.has(item.node.type))
+  const icons = exportable.filter((item) => ICON_TYPES.has(item.node.type))
 
   const copy = async () => {
     try {
@@ -48,6 +83,10 @@ export function CodePanel() {
     } catch {
       /* clipboard can be denied in embedded browsers */
     }
+  }
+
+  const saveHeader = (node: SceneNode, ident: string) => {
+    void downloadShapeHeader(node, ident)
   }
 
   return (
@@ -82,38 +121,16 @@ export function CodePanel() {
         </div>
       </div>
       <aside className="flex w-64 shrink-0 flex-col border-l border-line">
-        <div className="flex h-9 shrink-0 items-center border-b border-line px-3">
-          <h3 className="text-[11px] font-semibold text-ink">{t('editor.exportOptions')}</h3>
-        </div>
-        <div className="min-h-0 flex-1 overflow-auto px-3 py-2">
-          <div className="mb-2">
-            <div className="mb-1 text-[11px] font-semibold text-ink">{t('editor.shapeHeaders')}</div>
-            {shapeHeaders.length ? (
-              <div className="grid gap-0.5">
-                {shapeHeaders.map((item) => (
-                  <div key={item.node.id} className="flex h-7 items-center gap-1">
-                    <span className="min-w-0 flex-1 truncate text-[12px] text-ink" title={item.node.name}>
-                      {item.ident}.h
-                    </span>
-                    <span className="shrink-0 text-[11px] text-muted tabular-nums">
-                      {item.w}×{item.h}
-                    </span>
-                    <Tooltip content={t('editor.downloadHeader')}>
-                      <IconButton
-                        aria-label={`${t('editor.downloadHeader')} ${item.ident}.h`}
-                        onClick={() => void downloadShapeHeader(item.node, item.ident)}
-                      >
-                        <Download size={14} strokeWidth={1.5} />
-                      </IconButton>
-                    </Tooltip>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-[12px] text-muted">{t('editor.noShapeHeaders')}</div>
-            )}
+        <div className="min-h-0 flex-1 overflow-auto">
+          <div className="border-b border-line px-3 py-2">
+            <div className="mb-1 text-[11px] font-semibold text-ink">{t('editor.shapes')}</div>
+            <HeaderGrid items={shapes} empty={t('editor.noShapeHeaders')} onSave={saveHeader} />
           </div>
-          <div className="border-t border-line pt-2">
+          <div className="border-b border-line px-3 py-2">
+            <div className="mb-1 text-[11px] font-semibold text-ink">{t('editor.iconHeaders')}</div>
+            <HeaderGrid items={icons} empty={t('editor.noIconHeaders')} onSave={saveHeader} />
+          </div>
+          <div className="px-3 py-2">
             <div className="mb-1 text-[11px] font-semibold text-ink">{t('editor.exportOptions')}</div>
             <div className="grid gap-1">
               {FLAGS.map((flag) => (
@@ -126,16 +143,6 @@ export function CodePanel() {
               ))}
             </div>
           </div>
-          {assets.length > 0 ? (
-            <div className="mt-3 border-t border-line pt-2">
-              <div className="mb-1 text-[11px] font-semibold text-ink">{t('editor.images')}</div>
-              {assets.map((asset, index) => (
-                <div key={index} className="h-7 truncate text-[12px] leading-7 text-ink">
-                  {String((asset as { name?: string }).name ?? index)}
-                </div>
-              ))}
-            </div>
-          ) : null}
         </div>
         <div className="shrink-0 border-t border-line px-3 py-2 text-[11px] text-muted tabular-nums">
           {t('editor.bitmapBytes', { count: Math.ceil((project.device.width * project.device.height) / 8) })}

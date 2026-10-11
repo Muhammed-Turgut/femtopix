@@ -1,4 +1,4 @@
-import { inkRgb } from '@/core/color/rgb565'
+import { fillRgb, strokeRgb } from '@/core/color/rgb565'
 import type { SceneNode } from '@/core/document/model'
 import { PixelBuffer } from '@/core/render/pixel-buffer'
 
@@ -32,45 +32,62 @@ function pentagonPoints(node: SceneNode): { x: number; y: number }[] {
   })
 }
 
+function withFlip(points: { x: number; y: number }[], node: SceneNode): { x: number; y: number }[] {
+  if (!node.flipX && !node.flipY) return points
+  const bounds = box(node)
+  return points.map((point) => ({
+    x: node.flipX ? bounds.x + bounds.w - 1 - (point.x - bounds.x) : point.x,
+    y: node.flipY ? bounds.y + bounds.h - 1 - (point.y - bounds.y) : point.y
+  }))
+}
+
 export function drawNode(buffer: PixelBuffer, node: SceneNode, bitmaps: Map<string, MonoBitmap>): void {
   if (!node.visible || node.role === 'reference') return
-  const rgb = inkRgb(node)
-  if (rgb === null) return
-  const fill = node.fill !== false
-  const stroke = (node.stroke ?? 0) > 0
+  const fillInk = fillRgb(node)
+  const strokeInk = strokeRgb(node)
+  const fill = node.fill !== false && fillInk !== null
+  const stroke = ((node.stroke ?? 0) > 0 || node.fill === false) && strokeInk !== null
   const { x, y, w, h } = box(node)
 
   if (node.type === 'line' || node.type === 'polyline' || node.type === 'paint') {
-    buffer.line(node.x, node.y, node.x + (node.w ?? 0), node.y + (node.h ?? 0), rgb)
+    if (strokeInk === null) return
+    const x0 = node.flipX ? node.x + (node.w ?? 0) : node.x
+    const y0 = node.flipY ? node.y + (node.h ?? 0) : node.y
+    const x1 = node.flipX ? node.x : node.x + (node.w ?? 0)
+    const y1 = node.flipY ? node.y : node.y + (node.h ?? 0)
+    buffer.line(x0, y0, x1, y1, strokeInk)
     return
   }
   if (node.type === 'ellipse') {
-    buffer.ellipse(x, y, w, h, fill, rgb)
+    if (fill && fillInk !== null) buffer.ellipse(x, y, w, h, true, fillInk)
+    if (stroke && strokeInk !== null) buffer.ellipse(x, y, w, h, false, strokeInk)
     return
   }
   if (node.type === 'triangle') {
-    buffer.polygon(trianglePoints(node), fill, rgb)
+    buffer.polygon(withFlip(trianglePoints(node), node), fill, fillInk ?? 0, stroke, strokeInk ?? 0)
     return
   }
   if (node.type === 'polygon') {
-    buffer.polygon(pentagonPoints(node), fill, rgb)
+    buffer.polygon(withFlip(pentagonPoints(node), node), fill, fillInk ?? 0, stroke, strokeInk ?? 0)
     return
   }
   if (node.type === 'image' && node.asset) {
+    if (fillInk === null) return
     const key = `${node.asset}:${w}x${h}`
     const bitmap = bitmaps.get(key)
-    if (bitmap) buffer.blit(bitmap.data, bitmap.width, bitmap.height, x, y, w, h, rgb)
+    if (bitmap) buffer.blit(bitmap.data, bitmap.width, bitmap.height, x, y, w, h, fillInk, Boolean(node.flipX), Boolean(node.flipY))
     return
   }
   if (node.type === 'text') {
+    if (fillInk === null) return
     const key = `text:${node.text || node.name}:${w}x${h}:${node.font ?? ''}`
     const bitmap = bitmaps.get(key)
-    if (bitmap) buffer.blit(bitmap.data, bitmap.width, bitmap.height, x, y, w, h, rgb)
+    if (bitmap) buffer.blit(bitmap.data, bitmap.width, bitmap.height, x, y, w, h, fillInk, Boolean(node.flipX), Boolean(node.flipY))
     return
   }
 
-  if (fill) buffer.fillRect(x, y, w, h, rgb)
-  if (stroke || !fill) buffer.strokeRect(x, y, w, h, node.stroke || 1, rgb)
+  if (fill && fillInk !== null) buffer.fillRect(x, y, w, h, fillInk)
+  if (stroke && strokeInk !== null) buffer.strokeRect(x, y, w, h, node.stroke || 1, strokeInk)
 }
 
 export function rgbaToMono(bytes: Uint8ClampedArray, width: number, height: number): MonoBitmap {

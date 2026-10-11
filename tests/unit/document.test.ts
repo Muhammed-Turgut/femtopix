@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createEmptyDocument, parseDocument, placeholderCode, serializeDocument, toCIdentifier } from '@/core/document/model'
 import { nextAvailableIvecName, safeProjectStem } from '@/shared/project-file'
 import { useAppStore } from '@/store/app-store'
-import { addNode, createNode } from '@/ui/editor/document-actions'
+import { addNode, createNode, duplicateScreen, removeScreen } from '@/ui/editor/document-actions'
 
 describe('toCIdentifier', () => {
   it('transliterates Turkish characters and avoids reserved words', () => {
@@ -68,6 +68,30 @@ describe('document round-trip', () => {
     expect(code).toContain('d.fillRect(4, 8, 16, 10, 0xf800);')
   })
 
+  it('emits separate RGB565 fill and stroke colors', () => {
+    const doc = createEmptyDocument({ name: 'tft', profileId: 'st7789-240x240' })
+    doc.device.colorMode = 'rgb565'
+    doc.device.library = 'adafruit_gfx'
+    doc.screens[0]?.children.push({
+      id: 'n2',
+      type: 'rect',
+      name: 'frame',
+      x: 2,
+      y: 3,
+      w: 20,
+      h: 12,
+      visible: true,
+      locked: false,
+      color: '#FF0000',
+      strokeColor: '#0000FF',
+      fill: true,
+      stroke: 1
+    })
+    const code = placeholderCode(doc, doc.screens[0]!)
+    expect(code).toContain('d.fillRect(2, 3, 20, 12, 0xf800);')
+    expect(code).toContain('d.drawRect(2, 3, 20, 12, 0x001f);')
+  })
+
   it('rejects a file that is not ivec', () => {
     expect(() => parseDocument('{"hello":true}')).toThrow('invalid_schema')
     expect(() => parseDocument('{')).toThrow('invalid_json')
@@ -93,5 +117,22 @@ describe('edit history', () => {
     expect(useAppStore.getState().document?.screens[0]?.children).toHaveLength(0)
     useAppStore.getState().redo()
     expect(useAppStore.getState().document?.screens[0]?.children).toHaveLength(1)
+  })
+
+  it('duplicates and deletes a screen', () => {
+    useAppStore.getState().createProject({ name: 't', profileId: 'ssd1306-128x64' })
+    const first = useAppStore.getState().activeScreenId
+    expect(first).toBeTruthy()
+    addNode(first!, createNode('rect', 'box', { x: 2, y: 3, w: 4, h: 5 }))
+    const copyId = duplicateScreen(first!)
+    const screens = useAppStore.getState().document?.screens ?? []
+    expect(screens).toHaveLength(2)
+    expect(copyId).toBeTruthy()
+    expect(screens[1]?.children[0]?.id).not.toBe(screens[0]?.children[0]?.id)
+    expect(screens[1]?.children[0]?.name).toBe('box')
+    expect(removeScreen(first!)).toBe(true)
+    expect(useAppStore.getState().document?.screens).toHaveLength(1)
+    expect(removeScreen(useAppStore.getState().activeScreenId!)).toBe(false)
+    expect(useAppStore.getState().document?.screens).toHaveLength(1)
   })
 })

@@ -1,7 +1,7 @@
 import { ChevronLeft, Images } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { loadGallery, type GalleryCategory } from '@/core/gallery/catalog'
+import { isGallerySvg, loadGallery, type GalleryCategory } from '@/core/gallery/catalog'
 import { assetFromUrl, placeImageOnActiveScreen } from '@/ui/editor/document-actions'
 import { EmptyState, IconButton, Input } from '@/ui/primitives'
 
@@ -91,6 +91,7 @@ export function GalleryPanel() {
               aria-label={icon.name}
               className="grid aspect-square place-items-center rounded border border-line bg-elevated hover:bg-hover"
               onClick={() => {
+                if (!isGallerySvg(icon.file)) return
                 void assetFromUrl(icon.url).then((asset) => placeImageOnActiveScreen(icon.name, asset))
               }}
             >

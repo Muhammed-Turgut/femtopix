@@ -98,13 +98,6 @@ export const CanvasViewport = forwardRef<HTMLDivElement>(function CanvasViewport
         event.preventDefault()
         useAppStore.getState().setTool(TOOL_KEYS[key])
       }
-      if (event.key === 'Delete' || event.key === 'Backspace') {
-        const state = useAppStore.getState()
-        if (state.activeScreenId && state.selectedIds.length) {
-          event.preventDefault()
-          removeNodes(state.activeScreenId, state.selectedIds)
-        }
-      }
       if (event.key === 'Escape') {
         setSelectedIds([])
         useAppStore.getState().setTool('select')
@@ -405,6 +398,13 @@ export const CanvasViewport = forwardRef<HTMLDivElement>(function CanvasViewport
     if (onEmpty) {
       useAppStore.getState().setActiveScreen(null)
     }
+    const frame = event.currentTarget.getBoundingClientRect()
+    const edge = 10
+    const nearResize =
+      event.clientX - frame.left < edge ||
+      frame.right - event.clientX < edge ||
+      frame.bottom - event.clientY < edge
+    if (nearResize) return
     if (event.button === 1 || event.altKey || canPanTool || event.button === 0) {
       if (DRAW_TOOLS.has(tool) && event.button === 0 && !canPanTool && !event.altKey) return
       beginPan(event)

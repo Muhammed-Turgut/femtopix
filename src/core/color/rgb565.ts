@@ -39,7 +39,7 @@ export function snapHexToRgb565(hex: string): string {
 }
 
 export function rgb565Literal(color: SceneNode['color']): string {
-  const rgb = inkRgb({ color } as SceneNode) ?? 0
+  const rgb = inkRgb({ color }) ?? 0
   const r = (rgb >> 16) & 255
   const g = (rgb >> 8) & 255
   const b = rgb & 255
@@ -58,6 +58,14 @@ export function inkRgb(node: Pick<SceneNode, 'color'>): number | null {
   }
   if (typeof color === 'number' && color > 1) return color & 0xffffff
   return 0xffffff
+}
+
+export function fillRgb(node: Pick<SceneNode, 'color'>): number | null {
+  return inkRgb(node)
+}
+
+export function strokeRgb(node: Pick<SceneNode, 'color' | 'strokeColor'>): number | null {
+  return inkRgb({ color: node.strokeColor ?? node.color })
 }
 
 export function cssHexFromColor(color: SceneNode['color']): string {

@@ -1,5 +1,6 @@
 import {
   Box,
+  Copy,
   Eye,
   EyeOff,
   Image as ImageIcon,
@@ -11,6 +12,7 @@ import {
   Plus,
   Search,
   Square,
+  Trash2,
   Type,
   Circle
 } from 'lucide-react'
@@ -18,7 +20,17 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { SceneNode } from '@/core/document/model'
 import { currentScreen, useAppStore, type LeftTab } from '@/store/app-store'
-import { moveNode, renameNode, setSelectedIds, toggleNodeFlag } from '@/ui/editor/document-actions'
+import { duplicateSelection } from '@/ui/editor/edit-actions'
+import {
+  duplicateScreen,
+  moveNode,
+  removeNodes,
+  removeScreen,
+  renameNode,
+  renameScreen,
+  setSelectedIds,
+  toggleNodeFlag
+} from '@/ui/editor/document-actions'
 import { GalleryPanel } from '@/ui/editor/GalleryPanel'
 import { Button, EmptyState, IconButton, Input, Tabs, Tooltip } from '@/ui/primitives'
 
@@ -39,7 +51,8 @@ export function LeftPanel() {
   const [query, setQuery] = useState('')
   const [filterOpen, setFilterOpen] = useState(false)
   const [editing, setEditing] = useState<string | null>(null)
-  const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null)
+  const [editingScreen, setEditingScreen] = useState<string | null>(null)
+  const [menu, setMenu] = useState<{ x: number; y: number; id: string; kind: 'layer' | 'screen' } | null>(null)
   const [screensOpen, setScreensOpen] = useState(true)
   const [dropIndex, setDropIndex] = useState<number | null>(null)
 
@@ -80,19 +93,33 @@ export function LeftPanel() {
           </div>
           {screensOpen
             ? document.screens.map((item) => (
-                <button
+                <ScreenRow
                   key={item.id}
-                  type="button"
-                  onClick={() => useAppStore.getState().setActiveScreen(item.id)}
-                  className={`flex h-7 items-center justify-between px-3 text-left ${
-                    item.id === activeScreenId ? 'bg-selected' : 'hover:bg-hover'
-                  }`}
-                >
-                  <span className="truncate text-[12px]">{item.name}</span>
-                  <span className="text-[11px] text-muted tabular-nums">
-                    {document.device.width}×{document.device.height}
-                  </span>
-                </button>
+                  name={item.name}
+                  size={`${document.device.width}×${document.device.height}`}
+                  active={item.id === activeScreenId}
+                  editing={editingScreen === item.id}
+                  canDelete={document.screens.length > 1}
+                  onSelect={() => useAppStore.getState().setActiveScreen(item.id)}
+                  onRename={(name) => {
+                    renameScreen(item.id, name.trim() || t('editor.screen'))
+                    setEditingScreen(null)
+                  }}
+                  onEdit={() => setEditingScreen(item.id)}
+                  onCancelEdit={() => setEditingScreen(null)}
+                  onDuplicate={() => duplicateScreen(item.id)}
+                  onDelete={() => {
+                    if (!removeScreen(item.id)) useAppStore.getState().showToast(t('editor.lastScreen'))
+                  }}
+                  onMenu={(x, y) => {
+                    useAppStore.getState().setActiveScreen(item.id)
+                    setMenu({ kind: 'screen', x, y, id: item.id })
+                  }}
+                  labels={{
+                    duplicate: t('editor.duplicateScreen'),
+                    remove: t('editor.deleteScreen')
+                  }}
+                />
               ))
             : null}
 
@@ -150,7 +177,7 @@ export function LeftPanel() {
                       onContextMenu={(event) => {
                         event.preventDefault()
                         setSelectedIds([node.id])
-                        setMenu({ x: event.clientX, y: event.clientY, id: node.id })
+                        setMenu({ kind: 'layer', x: event.clientX, y: event.clientY, id: node.id })
                       }}
                       className={`group flex h-7 items-center gap-1 px-2 ${selected ? 'bg-selected' : 'hover:bg-hover'}`}
                     >
@@ -206,19 +233,33 @@ export function LeftPanel() {
             <Button onClick={() => useAppStore.getState().addScreen()}>{t('editor.addScreen')}</Button>
           </div>
           {document.screens.map((item) => (
-            <button
+            <ScreenRow
               key={item.id}
-              type="button"
-              onClick={() => useAppStore.getState().setActiveScreen(item.id)}
-              className={`flex h-7 w-full items-center justify-between px-3 ${
-                item.id === activeScreenId ? 'bg-selected' : 'hover:bg-hover'
-              }`}
-            >
-              <span>{item.name}</span>
-              <span className="text-[11px] text-muted tabular-nums">
-                {document.device.width}×{document.device.height}
-              </span>
-            </button>
+              name={item.name}
+              size={`${document.device.width}×${document.device.height}`}
+              active={item.id === activeScreenId}
+              editing={editingScreen === item.id}
+              canDelete={document.screens.length > 1}
+              onSelect={() => useAppStore.getState().setActiveScreen(item.id)}
+              onRename={(name) => {
+                renameScreen(item.id, name.trim() || t('editor.screen'))
+                setEditingScreen(null)
+              }}
+              onEdit={() => setEditingScreen(item.id)}
+              onCancelEdit={() => setEditingScreen(null)}
+              onDuplicate={() => duplicateScreen(item.id)}
+              onDelete={() => {
+                if (!removeScreen(item.id)) useAppStore.getState().showToast(t('editor.lastScreen'))
+              }}
+              onMenu={(x, y) => {
+                useAppStore.getState().setActiveScreen(item.id)
+                setMenu({ kind: 'screen', x, y, id: item.id })
+              }}
+              labels={{
+                duplicate: t('editor.duplicateScreen'),
+                remove: t('editor.deleteScreen')
+              }}
+            />
           ))}
         </div>
       ) : null}
@@ -253,14 +294,128 @@ export function LeftPanel() {
             type="button"
             className="flex h-7 w-full items-center px-3 text-left hover:bg-hover"
             onClick={() => {
-              setEditing(menu.id)
+              if (menu.kind === 'screen') setEditingScreen(menu.id)
+              else setEditing(menu.id)
               setMenu(null)
             }}
           >
             {t('editor.name')}
           </button>
+          <button
+            type="button"
+            className="flex h-7 w-full items-center px-3 text-left hover:bg-hover"
+            onClick={() => {
+              if (menu.kind === 'screen') duplicateScreen(menu.id)
+              else {
+                setSelectedIds([menu.id])
+                duplicateSelection()
+              }
+              setMenu(null)
+            }}
+          >
+            {menu.kind === 'screen' ? t('editor.duplicateScreen') : t('editor.duplicate')}
+          </button>
+          <button
+            type="button"
+            className={`flex h-7 w-full items-center px-3 text-left hover:bg-hover ${
+              menu.kind === 'screen' && document.screens.length <= 1 ? 'opacity-40' : ''
+            }`}
+            onClick={() => {
+              if (menu.kind === 'screen') {
+                if (!removeScreen(menu.id)) useAppStore.getState().showToast(t('editor.lastScreen'))
+              } else if (activeScreenId) {
+                removeNodes(activeScreenId, [menu.id])
+              }
+              setMenu(null)
+            }}
+          >
+            {menu.kind === 'screen' ? t('editor.deleteScreen') : t('editor.delete')}
+          </button>
         </div>
       ) : null}
+    </div>
+  )
+}
+
+function ScreenRow({
+  name,
+  size,
+  active,
+  editing,
+  canDelete,
+  onSelect,
+  onRename,
+  onEdit,
+  onCancelEdit,
+  onDuplicate,
+  onDelete,
+  onMenu,
+  labels
+}: {
+  name: string
+  size: string
+  active: boolean
+  editing: boolean
+  canDelete: boolean
+  onSelect: () => void
+  onRename: (name: string) => void
+  onEdit: () => void
+  onCancelEdit: () => void
+  onDuplicate: () => void
+  onDelete: () => void
+  onMenu: (x: number, y: number) => void
+  labels: { duplicate: string; remove: string }
+}) {
+  return (
+    <div
+      className={`group flex h-7 items-center gap-1 px-2 ${active ? 'bg-selected' : 'hover:bg-hover'}`}
+      onClick={onSelect}
+      onDoubleClick={onEdit}
+      onContextMenu={(event) => {
+        event.preventDefault()
+        onMenu(event.clientX, event.clientY)
+      }}
+    >
+      {editing ? (
+        <Input
+          autoFocus
+          defaultValue={name}
+          onClick={(event) => event.stopPropagation()}
+          onBlur={(event) => onRename(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') (event.target as HTMLInputElement).blur()
+            if (event.key === 'Escape') onCancelEdit()
+          }}
+        />
+      ) : (
+        <span className="min-w-0 flex-1 truncate text-[12px]">{name}</span>
+      )}
+      <span className="text-[11px] text-muted tabular-nums group-hover:hidden">{size}</span>
+      <Tooltip content={labels.duplicate}>
+        <IconButton
+          className="opacity-0 group-hover:opacity-100"
+          aria-label={labels.duplicate}
+          onClick={(event) => {
+            event.stopPropagation()
+            onDuplicate()
+          }}
+        >
+          <Copy size={14} strokeWidth={1.5} />
+        </IconButton>
+      </Tooltip>
+      <Tooltip content={labels.remove}>
+        <IconButton
+          className="opacity-0 group-hover:opacity-100"
+          aria-label={labels.remove}
+          disabled={!canDelete}
+          onClick={(event) => {
+            event.stopPropagation()
+            onDelete()
+          }}
+        >
+          <Trash2 size={14} strokeWidth={1.5} />
+        </IconButton>
+      </Tooltip>
     </div>
   )
 }
