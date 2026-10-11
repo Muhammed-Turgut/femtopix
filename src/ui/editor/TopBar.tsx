@@ -6,8 +6,9 @@ import { DEVICE_PROFILES, getProfile, listSelectableProfiles } from '@/core/devi
 import type { ColorMode, ExportTarget } from '@/core/document/model'
 import { useAppStore } from '@/store/app-store'
 import { ThemeControls } from '@/ui/chrome/ThemeControls'
+import { WindowControls, titlebarMaximizeIfEmpty } from '@/ui/chrome/WindowControls'
 import {
-  downloadGeneratedCode,
+  exportIconHeaders,
   libraryLabel,
   renameProject,
   setDeviceLibrary,
@@ -27,55 +28,59 @@ export function TopBar({ onSave, onHelp }: { onSave: () => void; onHelp: () => v
   const name = document.meta.name
 
   return (
-    <header className="grid h-10 shrink-0 grid-cols-[1fr_auto_1fr] items-center border-b border-line bg-panel px-3">
-      <div className="flex items-center gap-2">
-        <button type="button" className="flex items-center gap-2" onClick={() => useAppStore.getState().goHome()}>
+    <header
+      className="app-drag flex h-10 shrink-0 items-center border-b border-line bg-panel"
+      onDoubleClick={titlebarMaximizeIfEmpty}
+    >
+      <div className="flex min-w-0 flex-1 items-center gap-2 pl-3">
+        <button type="button" className="app-no-drag flex items-center gap-2" onClick={() => useAppStore.getState().goHome()}>
           <img src={logo} alt="" className="size-6 rounded" />
           <span className="text-[13px] font-semibold">{t('editor.workspace')}</span>
         </button>
+        <div className="app-no-drag flex min-w-0 items-center gap-1">
+          <Input
+            value={name}
+            placeholder={t('editor.untitled')}
+            onChange={(event) => renameProject(event.target.value)}
+            onBlur={(event) => {
+              if (!event.target.value.trim()) renameProject(t('editor.untitled'))
+            }}
+            className="h-7 w-[200px] max-w-[240px] bg-transparent text-left text-[13px] font-medium"
+          />
+          {dirty ? <span className="text-muted">•</span> : null}
+        </div>
+        <div className="app-no-drag ml-auto flex items-center gap-2">
+          <DeviceMenu
+            profileId={document.device.profile}
+            profileName={profile.id === 'custom' ? t('wizard.customSize') : profile.name}
+            width={document.device.width}
+            height={document.device.height}
+            colorMode={document.device.colorMode}
+            library={document.device.library}
+          />
+          <Button tone="ghost" onClick={onSave}>
+            <Save size={16} strokeWidth={1.5} />
+            {t('editor.save')}
+          </Button>
+          <Button tone="primary" onClick={() => void exportIconHeaders()}>
+            <Upload size={16} strokeWidth={1.5} />
+            {t('editor.export')}
+          </Button>
+          <Tooltip
+            content={
+              <span className="flex items-center gap-1">
+                {t('editor.help')} <span className="font-mono">Ctrl+/</span>
+              </span>
+            }
+          >
+            <IconButton onClick={onHelp} aria-label={t('editor.help')}>
+              <HelpCircle size={16} strokeWidth={1.5} />
+            </IconButton>
+          </Tooltip>
+          <ThemeControls />
+        </div>
       </div>
-      <div className="flex items-center gap-1">
-        <Input
-          value={name}
-          placeholder={t('editor.untitled')}
-          onChange={(event) => renameProject(event.target.value)}
-          onBlur={(event) => {
-            if (!event.target.value.trim()) renameProject(t('editor.untitled'))
-          }}
-          className="h-7 max-w-[240px] bg-transparent text-center text-[13px] font-medium"
-        />
-        {dirty ? <span className="text-muted">•</span> : null}
-      </div>
-      <div className="flex items-center justify-end gap-2">
-        <DeviceMenu
-          profileId={document.device.profile}
-          profileName={profile.id === 'custom' ? t('wizard.customSize') : profile.name}
-          width={document.device.width}
-          height={document.device.height}
-          colorMode={document.device.colorMode}
-          library={document.device.library}
-        />
-        <Button tone="ghost" onClick={onSave}>
-          <Save size={16} strokeWidth={1.5} />
-          {t('editor.save')}
-        </Button>
-        <Button tone="primary" onClick={() => downloadGeneratedCode()}>
-          <Upload size={16} strokeWidth={1.5} />
-          {t('editor.export')}
-        </Button>
-        <Tooltip
-          content={
-            <span className="flex items-center gap-1">
-              {t('editor.help')} <span className="font-mono">Ctrl+/</span>
-            </span>
-          }
-        >
-          <IconButton onClick={onHelp} aria-label={t('editor.help')}>
-            <HelpCircle size={16} strokeWidth={1.5} />
-          </IconButton>
-        </Tooltip>
-        <ThemeControls />
-      </div>
+      <WindowControls />
     </header>
   )
 }

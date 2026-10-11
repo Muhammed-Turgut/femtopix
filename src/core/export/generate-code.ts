@@ -1,6 +1,8 @@
 import { isColorDisplay, rgb565Literal } from '@/core/color/rgb565'
-import type { ExportTarget, IvecDocument, SceneNode, Screen } from '@/core/document/model'
+import { toCIdentifier, type ExportTarget, type IvecDocument, type SceneNode, type Screen } from '@/core/document/model'
 import { paintPoints } from '@/core/document/paint'
+import { resolveFont, textBaselineY } from '@/core/fonts/bitmap-font'
+import { clampCornerRadius } from '@/core/render/pixel-buffer'
 
 interface Flags {
   wrapperFunction: boolean
@@ -48,9 +50,34 @@ function cString(value: string): string {
 }
 
 function fontSymbol(font?: string): string {
-  if (font === '7x13') return 'u8g2_font_7x13_tr'
-  if (font === '8x13') return 'u8g2_font_8x13_tr'
-  return 'u8g2_font_6x10_tr'
+  return resolveFont(font).u8g2
+}
+
+let imageNames = new Map<string, string>()
+
+function assignImageNames(nodes: SceneNode[]): Map<string, string> {
+  const used = new Set<string>()
+  const names = new Map<string, string>()
+  for (const node of nodes) {
+    if (node.type !== 'image' && node.type !== 'paint') continue
+    names.set(node.id, toCIdentifier(node.name, used))
+  }
+  return names
+}
+
+function imageIdent(node: SceneNode): string {
+  return imageNames.get(node.id) ?? toCIdentifier(node.name)
+}
+
+function imageFrameCount(node: SceneNode): number {
+  return node.frames?.length && node.frames.length > 1 ? node.frames.length : 0
+}
+
+function imageBitsExpr(node: SceneNode, ident: string): string {
+  const count = imageFrameCount(node)
+  if (!count) return `${ident}_bits`
+  const ms = Math.max(1, Math.round(1000 / Math.max(1, node.fps ?? 8)))
+  return `${ident}_frames[(millis() / ${ms}) % ${count}]`
 }
 
 function trianglePoints(node: SceneNode): [number, number, number, number, number, number] {
@@ -139,28 +166,31 @@ function emitU8g2(node: SceneNode, flags: Flags): string[] {
   }
   if (node.type === 'text') {
     setInk(fillInk)
-    if (flags.includeFonts) lines.push(`  u8g2.setFont(${fontSymbol(node.font)});`)
-    lines.push(`  u8g2.drawStr(${x}, ${y + Math.max(8, h)}, ${cString(node.text || node.name)});`)
+    if (flags.includeFonts) {
+      lines.push(`  u8g2.setFont(${fontSymbol(node.font)});`)
+    }
+    lines.push(`  u8g2.drawStr(${x}, ${textBaselineY(node)}, ${cString(node.text || node.name)});`)
     return lines
   }
   if (node.type === 'image') {
     setInk(fillInk)
-    const ident = node.name.toLowerCase().replace(/[^a-z0-9]+/g, '_') || 'image'
+    const ident = imageIdent(node)
     if (flags.declareImages) {
-      lines.push(`  u8g2.drawXBMP(${x}, ${y}, ${w}, ${h}, ${ident}_bits);`)
+      lines.push(`  u8g2.drawXBMP(${x}, ${y}, ${w}, ${h}, ${imageBitsExpr(node, ident)});`)
     } else if (flags.comments) {
       lines.push(`  // görsel ${node.name} ${w}x${h}`)
     }
     return lines
   }
 
+  const radius = clampCornerRadius(w, h, node.radius ?? 0)
   if (fill) {
     setInk(fillInk)
-    lines.push(`  u8g2.drawBox(${x}, ${y}, ${w}, ${h});`)
+    lines.push(radius > 0 ? `  u8g2.drawRBox(${x}, ${y}, ${w}, ${h}, ${radius});` : `  u8g2.drawBox(${x}, ${y}, ${w}, ${h});`)
   }
   if (stroke) {
     setInk(strokeInk)
-    lines.push(`  u8g2.drawFrame(${x}, ${y}, ${w}, ${h});`)
+    lines.push(radius > 0 ? `  u8g2.drawRFrame(${x}, ${y}, ${w}, ${h}, ${radius});` : `  u8g2.drawFrame(${x}, ${y}, ${w}, ${h});`)
   }
   return lines
 }
@@ -236,34 +266,50 @@ function emitGfx(node: SceneNode, flags: Flags, fillInk: string, strokeInk: stri
   if (node.type === 'text') {
     lines.push(`  d.setCursor(${x}, ${y});`)
     lines.push(`  d.setTextColor(${fillInk});`)
+    lines.push(`  d.setTextSize(${resolveFont(node.font).gfxSize});`)
     lines.push(`  d.print(${cString(node.text || node.name)});`)
     return lines
   }
   if (node.type === 'image') {
-    const ident = node.name.toLowerCase().replace(/[^a-z0-9]+/g, '_') || 'image'
-    if (flags.declareImages) lines.push(`  d.drawBitmap(${x}, ${y}, ${ident}_bits, ${w}, ${h}, ${fillInk});`)
+    const ident = imageIdent(node)
+    if (flags.declareImages) lines.push(`  d.drawBitmap(${x}, ${y}, ${imageBitsExpr(node, ident)}, ${w}, ${h}, ${fillInk});`)
     return lines
   }
 
-  if (fill) lines.push(`  d.fillRect(${x}, ${y}, ${w}, ${h}, ${fillInk});`)
-  if (stroke) lines.push(`  d.drawRect(${x}, ${y}, ${w}, ${h}, ${strokeInk});`)
+  const radius = clampCornerRadius(w, h, node.radius ?? 0)
+  if (fill) {
+    lines.push(
+      radius > 0
+        ? `  d.fillRoundRect(${x}, ${y}, ${w}, ${h}, ${radius}, ${fillInk});`
+        : `  d.fillRect(${x}, ${y}, ${w}, ${h}, ${fillInk});`
+    )
+  }
+  if (stroke) {
+    lines.push(
+      radius > 0
+        ? `  d.drawRoundRect(${x}, ${y}, ${w}, ${h}, ${radius}, ${strokeInk});`
+        : `  d.drawRect(${x}, ${y}, ${w}, ${h}, ${strokeInk});`
+    )
+  }
   return lines
 }
 
 function imageDecls(nodes: SceneNode[], flags: Flags): string[] {
   if (!flags.declareImages) return []
-  const images = nodes.filter((node) => node.type === 'image')
-  return images.map((node) => {
-    const ident = node.name.toLowerCase().replace(/[^a-z0-9]+/g, '_') || 'image'
+  const lines: string[] = []
+  for (const node of nodes.filter((item) => item.type === 'image')) {
+    const ident = imageIdent(node)
     const w = i(Math.abs(node.w ?? 1))
     const h = i(Math.abs(node.h ?? 1))
-    return `static const unsigned char ${ident}_bits[] PROGMEM = { /* ${w}x${h} */ };`
-  })
+    lines.push(`#include "${ident}.h" /* ${w}x${h}${imageFrameCount(node) ? `, ${imageFrameCount(node)} frames` : ''} */`)
+  }
+  return lines
 }
 
 export function generateCode(document: IvecDocument, screen: Screen): string {
   const flags = flagsOf(document)
   const nodes = visibleNodes(screen)
+  imageNames = assignImageNames(nodes)
   const { width, height, library } = document.device
   const gfx = isGfx(library)
   const header = `// ${screen.name} — ${width}x${height} ${gfx ? gfxName(library) : 'u8g2'}`

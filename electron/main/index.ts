@@ -1,8 +1,9 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve, sep } from 'node:path'
-import { BrowserWindow, Menu, app, dialog, ipcMain, nativeTheme, screen, type MenuItemConstructorOptions } from 'electron'
-import type { AppSettings, Locale, ResolvedTheme, ThemePreference } from '../../src/shared/api'
+import { BrowserWindow, Menu, app, dialog, ipcMain, nativeTheme, screen, shell, type MenuItemConstructorOptions } from 'electron'
+import type { AppSettings, Locale, ResolvedTheme, SetupInput, ThemePreference } from '../../src/shared/api'
 import { IPC, PROJECT_FILE_MAX_BYTES } from '../../src/shared/api'
+import { HEADER_FILE_MAX_BYTES, headerFileName } from '../../src/shared/header-file'
 import { nextAvailableIvecName } from '../../src/shared/project-file'
 
 app.setName('femtopix')
@@ -10,7 +11,9 @@ app.setName('femtopix')
 const SETTINGS_DEFAULTS: AppSettings = {
   theme: 'system',
   locale: 'tr',
-  recents: []
+  recents: [],
+  projectsDir: null,
+  setupComplete: false
 }
 
 function settingsPath(): string {
@@ -23,7 +26,9 @@ function readSettings(): AppSettings {
     return {
       theme: raw.theme ?? SETTINGS_DEFAULTS.theme,
       locale: raw.locale ?? SETTINGS_DEFAULTS.locale,
-      recents: Array.isArray(raw.recents) ? raw.recents.filter((item) => typeof item === 'string') : []
+      recents: Array.isArray(raw.recents) ? raw.recents.filter((item) => typeof item === 'string') : [],
+      projectsDir: typeof raw.projectsDir === 'string' && raw.projectsDir.trim() ? raw.projectsDir : null,
+      setupComplete: Boolean(raw.setupComplete)
     }
   } catch {
     return { ...SETTINGS_DEFAULTS }
@@ -48,8 +53,72 @@ function rememberRecent(filePath: string): string[] {
   return recents
 }
 
-function projectsDir(): string {
+function swapRecent(from: string, to: string): string[] {
+  const settings = readSettings()
+  const recents = [
+    to,
+    ...settings.recents.filter((item) => resolve(item) !== resolve(from) && resolve(item) !== resolve(to))
+  ].slice(0, 12)
+  writeSettings({ ...settings, recents })
+  return recents
+}
+
+function renamedLibraryPath(current: string, suggestedName: string): string {
+  if (!isInside(projectsDir(), current)) return current
+  const dir = projectsDir()
+  const existing = readdirSync(dir).filter((name) => {
+    if (!name.toLowerCase().endsWith('.ivec')) return false
+    return resolve(join(dir, name)) !== resolve(current)
+  })
+  return join(dir, nextAvailableIvecName(existing, suggestedName))
+}
+
+function defaultProjectsDir(): string {
+  return join(app.getPath('documents'), 'femtopix')
+}
+
+function legacyProjectsDir(): string {
   return join(app.getPath('userData'), 'projects')
+}
+
+function isSafeProjectsDir(dir: string): boolean {
+  const resolved = resolve(dir)
+  if (!resolved || resolved.length < 4) return false
+  if (/^[a-zA-Z]:[\\/]?$/.test(resolved)) return false
+  if (resolved === '/' || resolved === '\\') return false
+  if (isInside(app.getAppPath(), resolved)) return false
+  return true
+}
+
+function projectsDir(): string {
+  const custom = readSettings().projectsDir
+  if (custom && isSafeProjectsDir(custom)) return resolve(custom)
+  if (hasLegacyLibrary()) return legacyProjectsDir()
+  return defaultProjectsDir()
+}
+
+function hasLegacyLibrary(): boolean {
+  const dir = legacyProjectsDir()
+  if (!existsSync(dir)) return false
+  return readdirSync(dir).some((name) => name.toLowerCase().endsWith('.ivec'))
+}
+
+function isSetupComplete(): boolean {
+  const settings = readSettings()
+  if (settings.setupComplete || settings.projectsDir) return true
+  if (settings.recents.length > 0) return true
+  return hasLegacyLibrary()
+}
+
+function createDesktopShortcut(): boolean {
+  if (!app.isPackaged || process.platform !== 'win32') return false
+  const link = join(app.getPath('desktop'), 'femtopix.lnk')
+  return shell.writeShortcutLink(link, {
+    target: app.getPath('exe'),
+    cwd: dirname(app.getPath('exe')),
+    description: 'femtopix',
+    appUserModelId: 'com.femtopix.app'
+  })
 }
 
 function isInside(root: string, filePath: string): boolean {
@@ -114,8 +183,9 @@ function createWindow(): BrowserWindow {
     minWidth: 1100,
     minHeight: 720,
     title: 'femtopix',
-    backgroundColor: '#171329',
+    backgroundColor: '#1e1e1e',
     show: false,
+    frame: false,
     autoHideMenuBar: true,
     icon: join(__dirname, '../../electron/resources/icon.png'),
     webPreferences: {
@@ -197,6 +267,38 @@ function registerIpc(): void {
 
   ipcMain.handle(IPC.getSettings, () => readSettings())
 
+  ipcMain.handle(IPC.getSetupState, () => {
+    const settings = readSettings()
+    return {
+      setupComplete: isSetupComplete(),
+      projectsDir: settings.projectsDir ?? defaultProjectsDir(),
+      defaultProjectsDir: defaultProjectsDir(),
+      desktopShortcutSupported: app.isPackaged && process.platform === 'win32'
+    }
+  })
+
+  ipcMain.handle(IPC.pickProjectsDir, async () => {
+    const result = await dialog.showOpenDialog({
+      title: 'Proje klasörü',
+      defaultPath: projectsDir(),
+      properties: ['openDirectory', 'createDirectory']
+    })
+    return result.canceled || !result.filePaths[0] ? null : result.filePaths[0]
+  })
+
+  ipcMain.handle(IPC.completeSetup, (_event, input: SetupInput) => {
+    const dir = resolve(String(input?.projectsDir ?? '').trim() || defaultProjectsDir())
+    if (!isSafeProjectsDir(dir)) throw new Error('invalid')
+    mkdirSync(dir, { recursive: true })
+    writeSettings({
+      ...readSettings(),
+      projectsDir: dir,
+      setupComplete: true
+    })
+    if (input?.desktopShortcut) createDesktopShortcut()
+    return { recents: [...new Set([...listLibraryPaths(), ...readSettings().recents])] }
+  })
+
   ipcMain.handle(IPC.setTheme, (_event, theme: ThemePreference) => {
     const settings = { ...readSettings(), theme }
     writeSettings(settings)
@@ -249,10 +351,66 @@ function registerIpc(): void {
 
   ipcMain.handle(IPC.listLibraryProjects, () => listLibraryPaths())
 
-  ipcMain.handle(IPC.writeProject, (_event, filePath: string, contents: string) => {
+  ipcMain.handle(IPC.deleteLibraryProject, (_event, filePath: string) => {
     if (!canWriteProject(filePath)) throw new Error('unreadable')
-    writeProjectFile(filePath, contents)
-    rememberRecent(filePath)
+    const resolved = resolve(filePath)
+    if (existsSync(resolved)) unlinkSync(resolved)
+    const settings = readSettings()
+    const recents = settings.recents.filter((item) => resolve(item) !== resolved)
+    writeSettings({ ...settings, recents })
+    return [...new Set([...listLibraryPaths(), ...recents])]
+  })
+
+  ipcMain.handle(IPC.saveHeaderFile, async (_event, suggestedName: string, contents: string) => {
+    if (typeof contents !== 'string' || contents.length > HEADER_FILE_MAX_BYTES) throw new Error('too_large')
+    const result = await dialog.showSaveDialog({
+      title: 'İkonu kaydet',
+      defaultPath: headerFileName(suggestedName),
+      filters: [{ name: 'C header', extensions: ['h'] }]
+    })
+    if (result.canceled || !result.filePath) return null
+    const filePath = result.filePath.toLowerCase().endsWith('.h') ? result.filePath : `${result.filePath}.h`
+    writeFileSync(filePath, contents, 'utf8')
+    return filePath
+  })
+
+  ipcMain.handle(IPC.saveHeaderFolder, async (_event, files: { name: string; contents: string }[]) => {
+    if (!Array.isArray(files) || files.length === 0) return null
+    if (files.some((file) => typeof file?.contents !== 'string' || file.contents.length > HEADER_FILE_MAX_BYTES)) {
+      throw new Error('too_large')
+    }
+    const result = await dialog.showOpenDialog({
+      title: 'İkon klasörü',
+      properties: ['openDirectory', 'createDirectory']
+    })
+    if (result.canceled || !result.filePaths[0]) return null
+    const dir = result.filePaths[0]
+    const written: string[] = []
+    const used = new Set<string>()
+    for (const file of files) {
+      let name = headerFileName(file.name)
+      let index = 2
+      while (used.has(name.toLowerCase()) || existsSync(join(dir, name))) {
+        name = headerFileName(`${name.replace(/\.h$/i, '')}_${index}`)
+        index += 1
+      }
+      used.add(name.toLowerCase())
+      const target = join(dir, name)
+      writeFileSync(target, file.contents, 'utf8')
+      written.push(target)
+    }
+    return written
+  })
+
+  ipcMain.handle(IPC.writeProject, (_event, filePath: string, contents: string, renameTo?: string) => {
+    if (!canWriteProject(filePath)) throw new Error('unreadable')
+    const current = resolve(filePath)
+    const next =
+      typeof renameTo === 'string' && renameTo.trim() ? renamedLibraryPath(current, renameTo) : current
+    writeProjectFile(next, contents)
+    if (next !== current && existsSync(current)) unlinkSync(current)
+    const recents = next === current ? rememberRecent(next) : swapRecent(current, next)
+    return { path: next, recents }
   })
 
   ipcMain.handle(IPC.rememberRecent, (_event, filePath: string) => rememberRecent(filePath))
@@ -263,6 +421,25 @@ function registerIpc(): void {
     if (contents.byteLength > PROJECT_FILE_MAX_BYTES) throw new Error('too_large')
     rememberRecent(filePath)
     return { path: filePath, contents: contents.toString('utf8') }
+  })
+
+  ipcMain.handle(IPC.windowMinimize, (event) => {
+    BrowserWindow.fromWebContents(event.sender)?.minimize()
+  })
+
+  ipcMain.handle(IPC.windowMaximize, (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) return
+    if (win.isMaximized()) win.unmaximize()
+    else win.maximize()
+  })
+
+  ipcMain.handle(IPC.windowClose, (event) => {
+    BrowserWindow.fromWebContents(event.sender)?.close()
+  })
+
+  ipcMain.handle(IPC.windowIsMaximized, (event) => {
+    return BrowserWindow.fromWebContents(event.sender)?.isMaximized() ?? false
   })
 }
 

@@ -1,4 +1,4 @@
-import { ChevronDown, Circle, Eraser, Hand, Hexagon, Image as ImageIcon, Minus, MousePointer2, Pencil, Pipette, Square, Triangle, Type } from 'lucide-react'
+import { ChevronDown, Circle, Eraser, Hand, Hexagon, Images, Minus, MousePointer2, Pencil, Pipette, Square, Triangle, Type } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore, type ToolId } from '@/store/app-store'
@@ -28,7 +28,7 @@ export function Toolbar() {
       </Group>
       <Rule />
       <Group>
-        <ToolButton id="image" shortcut="I" icon={ImageIcon} />
+        <GalleryButton />
         <ToolButton id="pencil" shortcut="B" icon={Pencil} />
         <ToolButton id="eraser" shortcut="E" icon={Eraser} />
       </Group>
@@ -86,6 +86,25 @@ export function Toolbar() {
         <ToolButton id="eyedropper" shortcut="K" icon={Pipette} />
       </Group>
     </div>
+  )
+}
+
+function GalleryButton() {
+  const { t } = useTranslation()
+  const open = useAppStore((s) => s.galleryOpen)
+  return (
+    <Tooltip
+      side="bottom"
+      content={
+        <span className="flex items-center gap-1">
+          {t('tools.gallery')} <Kbd>I</Kbd>
+        </span>
+      }
+    >
+      <IconButton active={open} onClick={() => useAppStore.getState().openGallery()}>
+        <Images size={16} strokeWidth={1.5} />
+      </IconButton>
+    </Tooltip>
   )
 }
 

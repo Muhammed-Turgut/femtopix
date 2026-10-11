@@ -19,7 +19,10 @@
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "sync:pixel-icons": "node scripts/sync-pixel-icons.mjs",
+    "sync:pixelarticons": "node scripts/sync-pixelarticons.mjs",
+    "make:anims": "node scripts/make-pixel-anims.mjs"
   },
   "dependencies": {
     "i18next": "^25.5.2",

@@ -7,11 +7,14 @@ import {
   unionBox,
   type AlignKey
 } from '@/core/document/arrange'
-import { placeholderCode, toCIdentifier, type ColorMode, type ExportTarget, type IvecDocument, type SceneNode, type Screen } from '@/core/document/model'
+import { toCIdentifier, type ColorMode, type ExportTarget, type IvecDocument, type SceneNode, type Screen } from '@/core/document/model'
 import { getProfile } from '@/core/devices/profiles'
-import { formatXbmHeader, packXbm } from '@/core/export/xbm'
+import { defaultBitmapFont, fitTextNode } from '@/core/fonts/bitmap-font'
+import { formatAnimationHeader, formatXbmHeader, packXbm } from '@/core/export/xbm'
 import { rgbaToMono, type MonoBitmap } from '@/core/render/draw-node'
 import { nodeBounds, rasterizeNode } from '@/core/render/raster-node'
+import i18n from '@/app/i18n'
+import { headerFileName } from '@/shared/header-file'
 import { currentScreen, useAppStore } from '@/store/app-store'
 
 export type { AlignKey }
@@ -209,12 +212,97 @@ function downloadTextFile(filename: string, contents: string): void {
   URL.revokeObjectURL(url)
 }
 
-export function downloadGeneratedCode(): void {
+export function isIconNode(node: SceneNode): boolean {
+  return node.type === 'image' || node.type === 'paint'
+}
+
+export function isAnimationNode(node: SceneNode): boolean {
+  return node.type === 'image' && (node.frames?.length ?? 0) > 1
+}
+
+export async function iconHeaderContents(node: SceneNode, ident = toCIdentifier(node.name)): Promise<string> {
+  const { w, h } = nodeBounds(node)
+  if (isAnimationNode(node) && node.frames?.length) {
+    const frames = []
+    for (const src of node.frames) frames.push(packXbm((await loadImageBitmap(src, w, h)).data, w, h))
+    return formatAnimationHeader({
+      ident,
+      name: node.name,
+      width: w,
+      height: h,
+      fps: Math.max(1, Math.round(node.fps ?? 8)),
+      frames
+    })
+  }
+  const bitmaps = new Map<string, MonoBitmap>()
+  if (node.type === 'image' && node.asset) {
+    bitmaps.set(`${node.asset}:${w}x${h}`, await loadImageBitmap(node.asset, w, h))
+  }
+  const buffer = rasterizeNode(node, bitmaps)
+  return formatXbmHeader({
+    ident,
+    name: node.name,
+    width: buffer.width,
+    height: buffer.height,
+    bits: packXbm(buffer.data, buffer.width, buffer.height)
+  })
+}
+
+async function writeHeaderFile(filename: string, contents: string): Promise<string | null> {
+  if (window.ivec?.saveHeaderFile) return window.ivec.saveHeaderFile(filename, contents)
+  downloadTextFile(headerFileName(filename), contents)
+  return headerFileName(filename)
+}
+
+export async function saveIconHeader(node: SceneNode, ident = toCIdentifier(node.name)): Promise<void> {
+  if (!isIconNode(node)) return
+  try {
+    const path = await writeHeaderFile(`${ident}.h`, await iconHeaderContents(node, ident))
+    if (path) useAppStore.getState().showToast(i18n.t('editor.iconSaved'))
+  } catch {
+    useAppStore.getState().showToast(i18n.t('errors.saveFailed'))
+  }
+}
+
+export async function exportIconHeaders(): Promise<void> {
   const state = useAppStore.getState()
-  const project = state.document
-  const screen = project?.screens.find((item) => item.id === state.activeScreenId) ?? project?.screens[0]
-  if (!project || !screen) return
-  downloadTextFile(`${screen.cIdentifier}.h`, placeholderCode(project, screen))
+  const screen = currentScreen(state.document, state.activeScreenId)
+  if (!screen) return
+  const used = new Set<string>()
+  const icons = screen.children.filter((node) => node.visible && node.role !== 'reference' && isIconNode(node))
+  if (!icons.length) {
+    useAppStore.getState().showToast(i18n.t('editor.exportNoIcons'))
+    return
+  }
+  try {
+    const files = []
+    for (const node of icons) {
+      const ident = toCIdentifier(node.name, used)
+      files.push({ name: `${ident}.h`, contents: await iconHeaderContents(node, ident) })
+    }
+    if (files.length === 1 && files[0]) {
+      const path = await writeHeaderFile(files[0].name, files[0].contents)
+      if (path) useAppStore.getState().showToast(i18n.t('editor.iconSaved'))
+      return
+    }
+    if (window.ivec?.saveHeaderFolder) {
+      const written = await window.ivec.saveHeaderFolder(files)
+      if (written?.length) useAppStore.getState().showToast(i18n.t('editor.iconsSaved', { count: written.length }))
+      return
+    }
+    for (const file of files) downloadTextFile(headerFileName(file.name), file.contents)
+    useAppStore.getState().showToast(i18n.t('editor.iconsSaved', { count: files.length }))
+  } catch {
+    useAppStore.getState().showToast(i18n.t('errors.saveFailed'))
+  }
+}
+
+export function downloadGeneratedCode(): void {
+  void exportIconHeaders()
+}
+
+export async function downloadShapeHeader(node: SceneNode, ident = toCIdentifier(node.name)): Promise<void> {
+  await saveIconHeader(node, ident)
 }
 
 function sampleCanvas(source: CanvasImageSource, w: number, h: number): MonoBitmap {
@@ -232,45 +320,15 @@ function sampleCanvas(source: CanvasImageSource, w: number, h: number): MonoBitm
 function loadImageBitmap(src: string, w: number, h: number): Promise<MonoBitmap> {
   return new Promise((resolve, reject) => {
     const image = new Image()
-    image.decoding = 'async'
-    image.onload = () => resolve(sampleCanvas(image, w, h))
+    const finish = () => resolve(sampleCanvas(image, w, h))
+    image.onload = () => {
+      const decoded = image.decode?.()
+      if (decoded) void decoded.then(finish).catch(finish)
+      else finish()
+    }
     image.onerror = () => reject(new Error('image'))
     image.src = src
   })
-}
-
-function textBitmap(text: string, w: number, h: number): MonoBitmap {
-  const canvas = document.createElement('canvas')
-  canvas.width = w
-  canvas.height = h
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return { width: w, height: h, data: new Uint8Array(w * h) }
-  ctx.imageSmoothingEnabled = false
-  ctx.fillStyle = '#000'
-  ctx.font = `${Math.max(6, h)}px "IBM Plex Mono", "JetBrains Mono", monospace`
-  ctx.textBaseline = 'top'
-  ctx.fillText(text, 0, 0)
-  return rgbaToMono(ctx.getImageData(0, 0, w, h).data, w, h)
-}
-
-export async function downloadShapeHeader(node: SceneNode, ident = toCIdentifier(node.name)): Promise<void> {
-  const { w, h } = nodeBounds(node)
-  const bitmaps = new Map<string, MonoBitmap>()
-  if (node.type === 'image' && node.asset) {
-    bitmaps.set(`${node.asset}:${w}x${h}`, await loadImageBitmap(node.asset, w, h))
-  }
-  if (node.type === 'text') {
-    bitmaps.set(`text:${node.text || node.name}:${w}x${h}:${node.font ?? ''}`, textBitmap(node.text || node.name, w, h))
-  }
-  const buffer = rasterizeNode(node, bitmaps)
-  const contents = formatXbmHeader({
-    ident,
-    name: node.name,
-    width: buffer.width,
-    height: buffer.height,
-    bits: packXbm(buffer.data, buffer.width, buffer.height)
-  })
-  downloadTextFile(`${ident}.h`, contents)
 }
 
 export function patchNode(
@@ -383,16 +441,27 @@ export function addNode(screenId: string, node: SceneNode): void {
   setSelectedIds([node.id])
 }
 
-export function placeImageOnActiveScreen(name: string, asset: string, size = 16): void {
-  const { document, activeScreenId } = useAppStore.getState()
+export function placeImageOnActiveScreen(
+  name: string,
+  asset: string,
+  size = 16,
+  origin?: { x: number; y: number },
+  extra?: Pick<SceneNode, 'frames' | 'fps'>
+): void {
+  const { document, activeScreenId, galleryAnchor } = useAppStore.getState()
   const screen = document?.screens.find((item) => item.id === activeScreenId) ?? document?.screens[0]
   if (!document || !screen) return
   const w = Math.min(size, document.device.width)
   const h = Math.min(size, document.device.height)
+  const point = origin ?? galleryAnchor
   const shift = screen.children.filter((node) => node.type === 'image').length * 4
-  const x = Math.max(0, Math.min(document.device.width - w, Math.round((document.device.width - w) / 2) + shift))
-  const y = Math.max(0, Math.min(document.device.height - h, Math.round((document.device.height - h) / 2) + shift))
-  addNode(screen.id, createNode('image', name, { x, y, w, h }, { asset, fill: false }))
+  const x = point
+    ? Math.max(0, Math.min(document.device.width - w, point.x))
+    : Math.max(0, Math.min(document.device.width - w, Math.round((document.device.width - w) / 2) + shift))
+  const y = point
+    ? Math.max(0, Math.min(document.device.height - h, point.y))
+    : Math.max(0, Math.min(document.device.height - h, Math.round((document.device.height - h) / 2) + shift))
+  addNode(screen.id, createNode('image', name, { x, y, w, h }, { asset, fill: false, ...extra }))
 }
 
 export async function assetFromUrl(url: string): Promise<string> {
@@ -439,7 +508,7 @@ export function createNode(
   if (isColorDisplay(mode) && (color === 1 || color === '1')) color = '#FFFFFF'
   let strokeColor: SceneNode['color'] = extra?.strokeColor ?? color
   if (isColorDisplay(mode) && (strokeColor === 1 || strokeColor === '1')) strokeColor = '#FFFFFF'
-  return {
+  const node: SceneNode = {
     id: `n_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     type,
     name,
@@ -455,6 +524,12 @@ export function createNode(
     color,
     strokeColor
   }
+  if (type === 'text') {
+    node.font = node.font || defaultBitmapFont(useAppStore.getState().document?.device.library)
+    if (!node.text) node.text = name
+    fitTextNode(node)
+  }
+  return node
 }
 
 export function libraryLabel(id: string): string {

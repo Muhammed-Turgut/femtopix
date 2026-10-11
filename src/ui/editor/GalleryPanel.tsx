@@ -2,6 +2,7 @@ import { ChevronLeft, Images } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { isGallerySvg, loadGallery, type GalleryCategory } from '@/core/gallery/catalog'
+import { useAppStore } from '@/store/app-store'
 import { assetFromUrl, placeImageOnActiveScreen } from '@/ui/editor/document-actions'
 import { EmptyState, IconButton, Input } from '@/ui/primitives'
 
@@ -25,6 +26,18 @@ export function GalleryPanel() {
       : active.icons
     : []
 
+  const openPicker = (
+    <div className="border-b border-line p-2">
+      <button
+        type="button"
+        onClick={() => useAppStore.getState().openGallery()}
+        className="flex h-7 w-full items-center justify-center rounded bg-accent text-[12px] font-medium text-on-accent hover:bg-accent-hover"
+      >
+        {t('editor.galleryOpen')}
+      </button>
+    </div>
+  )
+
   if (categories.length === 0) {
     return (
       <EmptyState
@@ -38,6 +51,7 @@ export function GalleryPanel() {
   if (!active) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
+        {openPicker}
         <div className="border-b border-line p-2">
           <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('editor.gallerySearch')} />
         </div>
@@ -63,6 +77,7 @@ export function GalleryPanel() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {openPicker}
       <div className="flex h-8 items-center gap-1 border-b border-line px-1">
         <IconButton
           aria-label={t('editor.galleryBack')}

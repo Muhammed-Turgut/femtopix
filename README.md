@@ -47,7 +47,7 @@ Hazır paketler [GitHub Releases](https://github.com/Muhammed-Turgut/ivec_draw/r
 | Platform | Paket | Ne yaparsın |
 | --- | --- | --- |
 | **Linux** (x86_64) | [femtopix-0.1.0-linux-x86_64.AppImage](https://github.com/Muhammed-Turgut/ivec_draw/releases/latest/download/femtopix-0.1.0-linux-x86_64.AppImage) | İndir, çalıştırılabilir yap, aç |
-| **Windows** (x64) | [femtopix-0.1.0-windows-x64.zip](https://github.com/Muhammed-Turgut/ivec_draw/releases/latest/download/femtopix-0.1.0-windows-x64.zip) | Zip’i aç, `femtopix.exe` çalıştır |
+| **Windows** (x64) | [femtopix-0.1.0-windows-x64.zip](https://github.com/Muhammed-Turgut/ivec_draw/releases/latest/download/femtopix-0.1.0-windows-x64.zip) | Zip’i aç, `femtopix.exe` çalıştır; ilk açılışta kurulum sihirbazı gelir |
 
 ### Linux
 
@@ -66,11 +66,16 @@ AppImage açılmazsa FUSE kapalı olabilir. Şunu dene:
 
 ### Windows
 
-1. [Windows paketini](https://github.com/Muhammed-Turgut/ivec_draw/releases/latest/download/femtopix-0.1.0-windows-x64.zip) indir.
-2. Zip’i bir klasöre çıkar (`femtopix/`).
-3. `femtopix.exe` dosyasına çift tıkla.
+1. [femtopix-0.1.0-windows-x64.zip](https://github.com/Muhammed-Turgut/ivec_draw/releases/latest/download/femtopix-0.1.0-windows-x64.zip) dosyasını indir.
+2. Klasöre çıkar, `femtopix.exe` çalıştır.
+3. İlk açılışta kurulum sihirbazı sorar:
+   - **Projeler nereye kaydedilsin?** (varsayılan: `Belgeler\femtopix`)
+   - **Masaüstüne kısayol oluştur**
+4. **Devam et** — ana ekran açılır.
 
 Windows SmartScreen “tanınmayan uygulama” diyebilir: **Ek bilgi → Yine de çalıştır**. Paket imzalı değil; kaynak bu depo.
+
+Uygulama klasörü + Başlat menüsü + masaüstü kısayolu olan klasik `.exe` kurulum, Windows’ta `npm run dist:win` ile üretilir.
 
 ## Nasıl kullanılır?
 
@@ -131,3 +136,5 @@ Linux’tan Windows kurulum `.exe` üretmek için Wine gerekir. Wine yoksa `dist
 ## Lisans
 
 [Apache-2.0](LICENSE)
+
+Galeri ikonları üçüncü taraf açık kaynak setlerden gelir (HackerNoon CC BY 4.0, Pixelarticons MIT, Kenney CC0). Ayrıntı: `gallery/NOTICE`.

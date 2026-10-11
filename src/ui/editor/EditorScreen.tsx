@@ -6,6 +6,7 @@ import { useAppStore } from '@/store/app-store'
 import { CanvasViewport, fitView } from '@/ui/editor/CanvasViewport'
 import { handleEditKey } from '@/ui/editor/edit-actions'
 import { CodePanel } from '@/ui/editor/CodePanel'
+import { GalleryPicker } from '@/ui/editor/GalleryPicker'
 import { HelpDialog } from '@/ui/editor/HelpDialog'
 import { LeftPanel } from '@/ui/editor/LeftPanel'
 import { ResizeRule } from '@/ui/editor/ResizeRule'
@@ -30,7 +31,13 @@ export function EditorScreen({ onSave }: { onSave: () => void }) {
         setHelp((value) => !value)
         return
       }
-      if (event.key === 'Escape') setHelp(false)
+      if (event.key === 'Escape') {
+        if (useAppStore.getState().galleryOpen) {
+          useAppStore.getState().closeGallery()
+          return
+        }
+        setHelp(false)
+      }
       handleEditKey(event)
     }
     window.addEventListener('keydown', onKey)
@@ -122,6 +129,7 @@ export function EditorScreen({ onSave }: { onSave: () => void }) {
           <CodePanel />
         </Panel>
       </PanelGroup>
+      <GalleryPicker />
       {help ? <HelpDialog onClose={() => setHelp(false)} /> : null}
     </div>
   )

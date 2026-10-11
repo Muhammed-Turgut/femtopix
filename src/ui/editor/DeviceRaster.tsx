@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { expandRgb565, isColorDisplay, parseCssHex } from '@/core/color/rgb565'
 import type { ColorMode, SceneNode } from '@/core/document/model'
+import { animatedAsset } from '@/core/gallery/animations'
 import { drawNode, rgbaToMono, type MonoBitmap } from '@/core/render/draw-node'
 import { PixelBuffer } from '@/core/render/pixel-buffer'
 
@@ -23,35 +24,18 @@ function loadImageBitmap(key: string, src: string, w: number, h: number, ready: 
   if (bitmaps.has(key) || loading.has(key)) return
   loading.add(key)
   const image = new Image()
-  image.decoding = 'async'
-  image.onload = () => {
+  const finish = () => {
     bitmaps.set(key, sampleCanvas(image, w, h))
     loading.delete(key)
     ready()
   }
+  image.onload = () => {
+    const decoded = image.decode?.()
+    if (decoded) void decoded.then(finish).catch(finish)
+    else finish()
+  }
   image.onerror = () => loading.delete(key)
   image.src = src
-}
-
-function loadTextBitmap(key: string, text: string, w: number, h: number, ready: () => void): void {
-  if (bitmaps.has(key) || loading.has(key)) return
-  loading.add(key)
-  const canvas = document.createElement('canvas')
-  canvas.width = w
-  canvas.height = h
-  const ctx = canvas.getContext('2d')
-  if (!ctx) {
-    loading.delete(key)
-    return
-  }
-  ctx.imageSmoothingEnabled = false
-  ctx.fillStyle = '#000'
-  ctx.font = `${Math.max(6, h)}px "IBM Plex Mono", "JetBrains Mono", monospace`
-  ctx.textBaseline = 'top'
-  ctx.fillText(text, 0, 0)
-  bitmaps.set(key, rgbaToMono(ctx.getImageData(0, 0, w, h).data, w, h))
-  loading.delete(key)
-  ready()
 }
 
 export function DeviceRaster({
@@ -77,14 +61,17 @@ export function DeviceRaster({
     for (const node of nodes) {
       const w = Math.max(1, Math.round(Math.abs(node.w ?? 1)))
       const h = Math.max(1, Math.round(Math.abs(node.h ?? 1)))
-      if (node.type === 'image' && node.asset) {
-        loadImageBitmap(`${node.asset}:${w}x${h}`, node.asset, w, h, ready)
-      }
-      if (node.type === 'text') {
-        loadTextBitmap(`text:${node.text || node.name}:${w}x${h}:${node.font ?? ''}`, node.text || node.name, w, h, ready)
-      }
+      const sources = node.type === 'image' ? (node.frames?.length ? node.frames : node.asset ? [node.asset] : []) : []
+      for (const src of sources) loadImageBitmap(`${src}:${w}x${h}`, src, w, h, ready)
     }
   }, [nodes])
+
+  const playing = nodes.some((node) => (node.frames?.length ?? 0) > 1)
+  useEffect(() => {
+    if (!playing) return
+    const id = window.setInterval(() => setRev((value) => value + 1), 80)
+    return () => window.clearInterval(id)
+  }, [playing])
 
   useEffect(() => {
     const canvas = ref.current
@@ -95,7 +82,11 @@ export function DeviceRaster({
     if (!ctx) return
     ctx.clearRect(0, 0, width, height)
     const buffer = new PixelBuffer(width, height)
-    for (const node of nodes) drawNode(buffer, node, bitmaps)
+    const now = Date.now()
+    for (const node of nodes) {
+      const asset = animatedAsset(node, now)
+      drawNode(buffer, asset && asset !== node.asset ? { ...node, asset } : node, bitmaps)
+    }
     const image = ctx.createImageData(width, height)
     const mono = parseCssHex(pixelOn) ?? { r: 255, g: 255, b: 255 }
     const color = isColorDisplay(colorMode)

@@ -5,6 +5,9 @@ import { IPC } from '../../src/shared/api'
 const api: IvecDesktopApi = {
   getAppInfo: () => ipcRenderer.invoke(IPC.getAppInfo),
   getSettings: () => ipcRenderer.invoke(IPC.getSettings),
+  getSetupState: () => ipcRenderer.invoke(IPC.getSetupState),
+  completeSetup: (input) => ipcRenderer.invoke(IPC.completeSetup, input),
+  pickProjectsDir: () => ipcRenderer.invoke(IPC.pickProjectsDir),
   setTheme: (theme: ThemePreference) => ipcRenderer.invoke(IPC.setTheme, theme),
   setLocale: (locale: Locale) => ipcRenderer.invoke(IPC.setLocale, locale),
   getResolvedTheme: () => ipcRenderer.invoke(IPC.getResolvedTheme),
@@ -17,9 +20,16 @@ const api: IvecDesktopApi = {
   saveProjectDialog: (suggestedName: string) => ipcRenderer.invoke(IPC.saveProjectDialog, suggestedName),
   createLibraryProject: (suggestedName, contents) => ipcRenderer.invoke(IPC.createLibraryProject, suggestedName, contents),
   listLibraryProjects: () => ipcRenderer.invoke(IPC.listLibraryProjects),
-  writeProject: (filePath, contents) => ipcRenderer.invoke(IPC.writeProject, filePath, contents),
+  deleteLibraryProject: (filePath) => ipcRenderer.invoke(IPC.deleteLibraryProject, filePath),
+  writeProject: (filePath, contents, renameTo) => ipcRenderer.invoke(IPC.writeProject, filePath, contents, renameTo),
+  saveHeaderFile: (suggestedName, contents) => ipcRenderer.invoke(IPC.saveHeaderFile, suggestedName, contents),
+  saveHeaderFolder: (files) => ipcRenderer.invoke(IPC.saveHeaderFolder, files),
   rememberRecent: (filePath) => ipcRenderer.invoke(IPC.rememberRecent, filePath),
-  openRecent: (filePath) => ipcRenderer.invoke(IPC.openRecent, filePath)
+  openRecent: (filePath) => ipcRenderer.invoke(IPC.openRecent, filePath),
+  windowMinimize: () => ipcRenderer.invoke(IPC.windowMinimize),
+  windowMaximize: () => ipcRenderer.invoke(IPC.windowMaximize),
+  windowClose: () => ipcRenderer.invoke(IPC.windowClose),
+  windowIsMaximized: () => ipcRenderer.invoke(IPC.windowIsMaximized)
 }
 
 contextBridge.exposeInMainWorld('ivec', api)

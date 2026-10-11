@@ -3,8 +3,22 @@ import { useTranslation } from 'react-i18next'
 import { bresenhamPixels } from '@/core/document/paint'
 import type { SceneNode } from '@/core/document/model'
 import { useAppStore, type ToolId } from '@/store/app-store'
+import { boxesOf } from '@/core/document/arrange'
+import {
+  alignmentGuides,
+  centerGuides,
+  screenBox,
+  snapBox,
+  snapPoint,
+  snapThreshold,
+  type GuideLine
+} from '@/core/document/guides'
 import { addNode, createNode, patchNode, removeNodes, renameScreen, setSelectedIds } from '@/ui/editor/document-actions'
+import { defaultBitmapFont, measureText } from '@/core/fonts/bitmap-font'
+import { gridCellScreenPx } from '@/core/render/pixel-grid'
+import { nodeBounds } from '@/core/render/raster-node'
 import { DeviceRaster } from '@/ui/editor/DeviceRaster'
+import { GuideOverlay } from '@/ui/editor/GuideOverlay'
 import { LayerPreview } from '@/ui/editor/LayerPreview'
 
 const MIN_ZOOM = 1
@@ -83,6 +97,8 @@ export const CanvasViewport = forwardRef<HTMLDivElement>(function CanvasViewport
   const [panning, setPanning] = useState(false)
   const [editing, setEditing] = useState<string | null>(null)
   const [draft, setDraft] = useState<SceneNode | null>(null)
+  const [guides, setGuides] = useState<GuideLine[]>([])
+  const [placing, setPlacing] = useState(false)
   const drag = useRef<{ kind: 'pan'; lastX: number; lastY: number } | null>(null)
   const screenDrag = useRef<{
     id: string
@@ -104,6 +120,7 @@ export const CanvasViewport = forwardRef<HTMLDivElement>(function CanvasViewport
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (isTyping(event.target)) return
+      if (useAppStore.getState().galleryOpen) return
       if (event.code === 'Space') {
         event.preventDefault()
         setSpaceDown(true)
@@ -277,26 +294,6 @@ export const CanvasViewport = forwardRef<HTMLDivElement>(function CanvasViewport
     stopScreenDrag.current = onUp
   }
 
-  const pickImage = (screenId: string, point: { x: number; y: number }) => {
-    const input = window.document.createElement('input')
-    input.type = 'file'
-    input.accept = 'image/*'
-    input.addEventListener('change', () => {
-      const file = input.files?.[0]
-      if (!file) return
-      const reader = new FileReader()
-      reader.onload = () => {
-        const asset = String(reader.result || '')
-        addNode(
-          screenId,
-          createNode('image', t('tools.image'), { x: point.x, y: point.y, w: 32, h: 32 }, { asset, fill: false })
-        )
-      }
-      reader.readAsDataURL(file)
-    })
-    input.click()
-  }
-
   const beginDraw = (event: React.PointerEvent<HTMLDivElement>, screenId: string, frame: HTMLDivElement) => {
     if (event.button !== 0 || canPanTool || event.altKey) return
     if (!DRAW_TOOLS.has(tool) && tool !== 'eyedropper') return
@@ -306,16 +303,24 @@ export const CanvasViewport = forwardRef<HTMLDivElement>(function CanvasViewport
     const maxW = document.device.width
     const maxH = document.device.height
     const start = clientToDevice(event, frame, zoom, maxW, maxH)
+    const device = screenBox(maxW, maxH)
+    const others = boxesOf((document.screens.find((item) => item.id === screenId)?.children ?? []).filter((node) => node.visible))
+    const threshold = snapThreshold(zoom)
 
     if (tool === 'text') {
+      const font = defaultBitmapFont(document.device.library)
+      const text = t('editor.text')
+      const size = measureText(text, font)
+      const snapped = snapBox({ id: 'draft', x: start.x, y: start.y, ...size }, device, others, threshold)
       addNode(
         screenId,
-        createNode('text', t('tools.text'), { x: start.x, y: start.y, w: 40, h: 10 }, { text: t('editor.text'), fill: false })
+        createNode('text', t('tools.text'), { x: snapped.x, y: snapped.y, w: size.w, h: size.h }, { text, font, fill: false })
       )
+      setGuides(snapped.guides)
       return
     }
     if (tool === 'image') {
-      pickImage(screenId, start)
+      useAppStore.getState().openGallery(start)
       return
     }
     if (tool === 'eyedropper') {
@@ -372,27 +377,30 @@ export const CanvasViewport = forwardRef<HTMLDivElement>(function CanvasViewport
 
     const type = tool as SceneNode['type']
     const name = t(`tools.${tool}`)
+    setPlacing(true)
+
+    const draftFrom = (end: { x: number; y: number }) => {
+      const snapped = snapPoint(end, device, others, threshold)
+      setGuides(snapped.guides)
+      if (type === 'line') {
+        return createNode(type, name, { x: start.x, y: start.y, w: snapped.x - start.x, h: snapped.y - start.y }, { color: drawColor.current, fill: false, stroke: 1 })
+      }
+      return createNode(type, name, boxOf(start, snapped), { color: drawColor.current })
+    }
 
     const onMove = (move: PointerEvent) => {
-      const end = clientToDevice(move, frame, zoom, maxW, maxH)
-      if (type === 'line') {
-        setDraft(createNode(type, name, { x: start.x, y: start.y, w: end.x - start.x, h: end.y - start.y }, { color: drawColor.current, fill: false, stroke: 1 }))
-        return
-      }
-      setDraft(createNode(type, name, boxOf(start, end), { color: drawColor.current }))
+      setDraft(draftFrom(clientToDevice(move, frame, zoom, maxW, maxH)))
     }
     const onUp = (up: PointerEvent) => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onUp)
       stopDraw.current = null
-      const end = clientToDevice(up, frame, zoom, maxW, maxH)
-      const node =
-        type === 'line'
-          ? createNode(type, name, { x: start.x, y: start.y, w: end.x - start.x, h: end.y - start.y }, { color: drawColor.current, fill: false, stroke: 1 })
-          : createNode(type, name, boxOf(start, end), { color: drawColor.current })
+      const node = draftFrom(clientToDevice(up, frame, zoom, maxW, maxH))
       if (Math.abs(node.w ?? 0) > 0 || Math.abs(node.h ?? 0) > 0) addNode(screenId, node)
       setDraft(null)
+      setPlacing(false)
+      setGuides([])
     }
     stopDraw.current?.()
     window.addEventListener('pointermove', onMove)
@@ -417,21 +425,30 @@ export const CanvasViewport = forwardRef<HTMLDivElement>(function CanvasViewport
     const startY = event.clientY
     const originX = node.x
     const originY = node.y
+    const device = screenBox(document.device.width, document.device.height)
+    const others = boxesOf(
+      (document.screens.find((item) => item.id === screenId)?.children ?? []).filter((item) => item.visible && item.id !== node.id)
+    )
     let recorded = false
+    setPlacing(true)
     const onMove = (move: PointerEvent) => {
       const zoomNow = useAppStore.getState().document?.ui.zoom ?? 1
-      const x = Math.round(originX + (move.clientX - startX) / zoomNow)
-      const y = Math.round(originY + (move.clientY - startY) / zoomNow)
+      const rawX = Math.round(originX + (move.clientX - startX) / zoomNow)
+      const rawY = Math.round(originY + (move.clientY - startY) / zoomNow)
+      const size = nodeBounds(node)
+      const bounds = { id: node.id, x: rawX, y: rawY, w: size.w, h: size.h }
+      const snapped = snapBox(bounds, device, others, snapThreshold(zoomNow))
       if (!recorded) {
         useAppStore.getState().pushHistory()
         recorded = true
       }
+      setGuides(snapped.guides)
       patchNode(
         screenId,
         node.id,
         (item) => {
-          item.x = x
-          item.y = y
+          item.x = snapped.x
+          item.y = snapped.y
         },
         { record: false }
       )
@@ -439,6 +456,8 @@ export const CanvasViewport = forwardRef<HTMLDivElement>(function CanvasViewport
     const onUp = () => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
+      setPlacing(false)
+      setGuides([])
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
@@ -567,9 +586,32 @@ export const CanvasViewport = forwardRef<HTMLDivElement>(function CanvasViewport
                   colorMode={document.device.colorMode}
                   pixelOn={document.device.preview.pixelOn}
                 />
-                {document.ui.grid && zoom >= 4 ? (
-                  <div className="pixel-grid pointer-events-none absolute inset-0" style={{ ['--cell' as string]: `${zoom}px` }} />
+                {document.ui.grid ? (
+                  <div
+                    className="pixel-grid pointer-events-none absolute inset-0"
+                    style={{ ['--cell' as string]: `${gridCellScreenPx(zoom)}px` }}
+                  />
                 ) : null}
+                {(() => {
+                  const frame = screenBox(document.device.width, document.device.height)
+                  const selected = !draft && !placing && selectedIds.length === 1
+                    ? screen.children.find((node) => node.id === selectedIds[0] && node.visible)
+                    : null
+                  const idle = selected
+                    ? alignmentGuides(
+                        { id: selected.id, ...nodeBounds(selected) },
+                        frame,
+                        boxesOf(screen.children.filter((node) => node.visible && node.id !== selected.id)),
+                        1
+                      )
+                    : []
+                  return (
+                    <>
+                      {draft || placing ? <GuideOverlay lines={centerGuides(frame)} zoom={zoom} dim /> : null}
+                      <GuideOverlay lines={guides.length ? guides : idle} zoom={zoom} />
+                    </>
+                  )
+                })()}
                 {screen.children.map((node) => (
                   <LayerPreview
                     key={node.id}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SceneNode } from '@/core/document/model'
-import { formatXbmHeader, packXbm } from '@/core/export/xbm'
+import { formatAnimationHeader, formatXbmHeader, packXbm } from '@/core/export/xbm'
 import { rasterizeNode } from '@/core/render/raster-node'
 import { PixelBuffer } from '@/core/render/pixel-buffer'
 
@@ -21,6 +21,17 @@ describe('pixel buffer', () => {
     expect(at(frame, 1, 1)).toBe(0xffffffff)
     expect(at(frame, 2, 2)).toBe(0)
     expect(at(frame, 4, 4)).toBe(0xffffffff)
+  })
+
+  it('rounds rect corners and leaves the outer pixels empty', () => {
+    const buffer = new PixelBuffer(8, 8)
+    buffer.fillRoundRect(0, 0, 8, 8, 2)
+    expect(at(buffer, 0, 0)).toBe(0)
+    expect(at(buffer, 7, 0)).toBe(0)
+    expect(at(buffer, 0, 7)).toBe(0)
+    expect(at(buffer, 7, 7)).toBe(0)
+    expect(at(buffer, 3, 3)).toBe(0xffffffff)
+    expect(at(buffer, 2, 0)).toBe(0xffffffff)
   })
 
   it('draws a Bresenham line without anti-alias', () => {
@@ -67,6 +78,22 @@ describe('xbm header', () => {
     expect(header).toContain('#define dikdortgen_width 8')
     expect(header).toContain('#define dikdortgen_height 4')
     expect(header).toContain('dikdortgen_bits[] PROGMEM')
+  })
+
+  it('emits one bitmap per animation frame', () => {
+    const header = formatAnimationHeader({
+      ident: 'kalp',
+      name: 'Kalp',
+      width: 8,
+      height: 1,
+      fps: 8,
+      frames: [Uint8Array.from([0x01]), Uint8Array.from([0x80])]
+    })
+    expect(header).toContain('#define kalp_frame_count 2')
+    expect(header).toContain('#define kalp_fps 8')
+    expect(header).toContain('kalp_0_bits[] PROGMEM')
+    expect(header).toContain('kalp_1_bits[] PROGMEM')
+    expect(header).toContain('kalp_frames[] PROGMEM = { kalp_0_bits, kalp_1_bits }')
   })
 })
 

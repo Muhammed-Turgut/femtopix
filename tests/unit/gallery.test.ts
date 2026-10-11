@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { groupGallery, loadGallery } from '@/core/gallery/catalog'
+import { filterGalleryIcons, groupGallery, loadGallery } from '@/core/gallery/catalog'
 
 describe('groupGallery', () => {
   it('groups files by category folder and applies category.json names', () => {
@@ -40,6 +40,22 @@ describe('groupGallery', () => {
   })
 })
 
+describe('filterGalleryIcons', () => {
+  it('filters by category and query', () => {
+    const categories = groupGallery(
+      {
+        '../../../gallery/weather/cloud.svg': '/cloud.svg',
+        '../../../gallery/weather/sun.svg': '/sun.svg',
+        '../../../gallery/food/cup.svg': '/cup.svg'
+      },
+      {}
+    )
+    expect(filterGalleryIcons(categories, '', 'all')).toHaveLength(3)
+    expect(filterGalleryIcons(categories, 'sun', 'all').map((icon) => icon.file)).toEqual(['sun.svg'])
+    expect(filterGalleryIcons(categories, '', 'food').map((icon) => icon.file)).toEqual(['cup.svg'])
+  })
+})
+
 describe('loadGallery', () => {
   it('reads every category folder that has icons', () => {
     const categories = loadGallery()
@@ -60,6 +76,7 @@ describe('loadGallery', () => {
         'health',
         'interface',
         'internet',
+        'kenney',
         'logo',
         'map',
         'money',
@@ -67,6 +84,11 @@ describe('loadGallery', () => {
         'pet',
         'phone',
         'photography',
+        'pixel',
+        'pixel-brands',
+        'pixel-solid',
+        'pixel-topics',
+        'pixelart',
         'romance',
         'shopping',
         'social',
@@ -78,7 +100,7 @@ describe('loadGallery', () => {
         'weather'
       ].sort()
     )
-    expect(icons).toBe(658)
+    expect(icons).toBe(2500)
     expect(categories.every((category) => category.icons.every((icon) => icon.file.endsWith('.svg')))).toBe(true)
     expect(categories.find((category) => category.id === 'school-science')).toBeUndefined()
     expect(categories.find((category) => category.id === 'weather')?.name.tr).toBe('Hava')

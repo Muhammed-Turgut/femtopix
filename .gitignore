@@ -7,3 +7,4 @@ cache
 .ivec/backups
 .ivec/recovery
 *.local
+.tmp-pixel-icons

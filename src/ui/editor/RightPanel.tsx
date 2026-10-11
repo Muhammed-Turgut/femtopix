@@ -27,6 +27,7 @@ import {
   patchNode,
   renameNode,
   renameScreen,
+  saveIconHeader,
   selectedNode,
   setDeviceLibrary,
   setDeviceMode,
@@ -36,7 +37,8 @@ import {
   type AlignKey
 } from '@/ui/editor/document-actions'
 import { cssHexFromColor } from '@/core/color/rgb565'
-import { ColorField, Field, IconButton, Input, NumberInput, Section, Select, Switch, Tooltip } from '@/ui/primitives'
+import { applyTextFont, defaultBitmapFont, fitTextNode, fontsForLibrary, setTextBaselineY, textBaselineY } from '@/core/fonts/bitmap-font'
+import { Button, ColorField, Field, IconButton, Input, NumberInput, Section, Select, Switch, Tooltip } from '@/ui/primitives'
 
 const ALIGN: { Icon: typeof AlignStartHorizontal; key: AlignKey; label: 'alignLeft' | 'alignCenterX' | 'alignRight' | 'alignTop' | 'alignCenterY' | 'alignBottom' }[] = [
   { Icon: AlignStartHorizontal, key: 'startX', label: 'alignLeft' },
@@ -190,9 +192,31 @@ export function RightPanel() {
       <Section title={t('editor.transform')}>
         <div className="grid grid-cols-2 gap-2">
           <NumberInput label="X" value={node.x} onChange={(x) => patchNode(screen.id, node.id, (item) => { item.x = x })} />
-          <NumberInput label="Y" value={node.y} onChange={(y) => patchNode(screen.id, node.id, (item) => { item.y = y })} />
-          <NumberInput label="W" value={node.w ?? 0} onChange={(w) => patchNode(screen.id, node.id, (item) => { item.w = w })} />
-          <NumberInput label="H" value={node.h ?? 0} onChange={(h) => patchNode(screen.id, node.id, (item) => { item.h = h })} />
+          <NumberInput
+            label="Y"
+            value={node.type === 'text' ? textBaselineY(node) : node.y}
+            onChange={(y) =>
+              patchNode(screen.id, node.id, (item) => {
+                if (item.type === 'text') setTextBaselineY(item, y)
+                else item.y = y
+              })
+            }
+          />
+          {node.type === 'text' ? null : (
+            <>
+              <NumberInput label="W" value={node.w ?? 0} onChange={(w) => patchNode(screen.id, node.id, (item) => { item.w = w })} />
+              <NumberInput label="H" value={node.h ?? 0} onChange={(h) => patchNode(screen.id, node.id, (item) => { item.h = h })} />
+            </>
+          )}
+          {node.type === 'rect' ? (
+            <NumberInput
+              label="R"
+              value={node.radius ?? 0}
+              min={0}
+              max={Math.max(0, Math.floor((Math.min(Math.abs(node.w ?? 1), Math.abs(node.h ?? 1)) - 1) / 2))}
+              onChange={(radius) => patchNode(screen.id, node.id, (item) => { item.radius = radius })}
+            />
+          ) : null}
         </div>
       </Section>
       <Section title={t('editor.appearance')}>
@@ -255,22 +279,36 @@ export function RightPanel() {
       </Section>
       {node.type === 'text' ? (
         <Section title={t('editor.text')}>
+          <Field label={t('editor.content')}>
+            <Input
+              value={node.text ?? ''}
+              onChange={(event) =>
+                patchNode(screen.id, node.id, (item) => {
+                  item.text = event.target.value
+                  fitTextNode(item)
+                })
+              }
+            />
+          </Field>
           <Field label={t('editor.font')}>
             <Select
-              value={node.font ?? '6x10'}
-              onChange={(font) => patchNode(screen.id, node.id, (item) => { item.font = font })}
-              options={[
-                { value: '6x10', label: '6×10' },
-                { value: '7x13', label: '7×13' },
-                { value: '8x13', label: '8×13' }
-              ]}
+              value={node.font ?? defaultBitmapFont(document.device.library)}
+              onChange={(font) =>
+                patchNode(screen.id, node.id, (item) => {
+                  applyTextFont(item, font)
+                })
+              }
+              options={fontsForLibrary(document.device.library).map((font) => ({ value: font.id, label: font.label }))}
             />
           </Field>
         </Section>
       ) : null}
-      {node.type === 'image' ? (
-        <Section title={t('editor.image')}>
-          <div className="text-[12px] text-ink">{node.asset ?? t('editor.emptyAssetsTitle')}</div>
+      {node.type === 'image' || node.type === 'paint' ? (
+        <Section title={t('editor.iconHeaders')}>
+          {node.type === 'image' ? (
+            <div className="truncate text-[12px] text-ink">{node.asset ? node.name : t('editor.emptyAssetsTitle')}</div>
+          ) : null}
+          <Button onClick={() => void saveIconHeader(node)}>{t('editor.saveIconHeader')}</Button>
         </Section>
       ) : null}
       <Section title={t('editor.code')}>

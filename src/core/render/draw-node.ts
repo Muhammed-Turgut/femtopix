@@ -1,6 +1,7 @@
 import { fillRgb, strokeRgb } from '@/core/color/rgb565'
 import { paintPoints } from '@/core/document/paint'
 import type { SceneNode } from '@/core/document/model'
+import { drawBitmapText } from '@/core/fonts/bitmap-font'
 import { PixelBuffer } from '@/core/render/pixel-buffer'
 
 export type MonoBitmap = { width: number; height: number; data: Uint8Array }
@@ -86,24 +87,54 @@ export function drawNode(buffer: PixelBuffer, node: SceneNode, bitmaps: Map<stri
   }
   if (node.type === 'text') {
     if (fillInk === null) return
-    const key = `text:${node.text || node.name}:${w}x${h}:${node.font ?? ''}`
-    const bitmap = bitmaps.get(key)
-    if (bitmap) buffer.blit(bitmap.data, bitmap.width, bitmap.height, x, y, w, h, fillInk, Boolean(node.flipX), Boolean(node.flipY))
+    drawBitmapText(buffer, x, y, node.text || node.name, node.font, fillInk)
     return
   }
 
+  const radius = node.type === 'rect' ? (node.radius ?? 0) : 0
+  if (radius > 0) {
+    if (fill && fillInk !== null) buffer.fillRoundRect(x, y, w, h, radius, fillInk)
+    if (stroke && strokeInk !== null) buffer.strokeRoundRect(x, y, w, h, radius, node.stroke || 1, strokeInk)
+    return
+  }
   if (fill && fillInk !== null) buffer.fillRect(x, y, w, h, fillInk)
   if (stroke && strokeInk !== null) buffer.strokeRect(x, y, w, h, node.stroke || 1, strokeInk)
 }
 
 export function rgbaToMono(bytes: Uint8ClampedArray, width: number, height: number): MonoBitmap {
-  const data = new Uint8Array(width * height)
-  for (let i = 0; i < width * height; i += 1) {
+  const count = width * height
+  const data = new Uint8Array(count)
+  const kind = new Uint8Array(count)
+  let dark = 0
+  let light = 0
+  let other = 0
+  for (let i = 0; i < count; i += 1) {
     const a = bytes[i * 4 + 3] ?? 0
+    if (a <= 96) continue
     const r = bytes[i * 4] ?? 0
     const g = bytes[i * 4 + 1] ?? 0
     const b = bytes[i * 4 + 2] ?? 0
-    data[i] = a > 96 && (r + g + b) / 3 < 220 ? 1 : 0
+    const lum = (r + g + b) / 3
+    if (lum < 40) {
+      kind[i] = 1
+      dark += 1
+    } else if (lum > 220) {
+      kind[i] = 2
+      light += 1
+    } else {
+      kind[i] = 3
+      other += 1
+    }
+  }
+  const backdrop = count * 0.45
+  const dropDark = dark > backdrop && light + other > 0
+  const dropLight = light > backdrop && dark + other > 0
+  for (let i = 0; i < count; i += 1) {
+    const pixel = kind[i] ?? 0
+    if (pixel === 0) continue
+    if (dropDark && pixel === 1) continue
+    if (dropLight && pixel === 2) continue
+    data[i] = 1
   }
   return { width, height, data }
 }

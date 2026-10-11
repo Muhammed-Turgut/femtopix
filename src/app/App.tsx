@@ -1,12 +1,15 @@
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import i18n from '@/app/i18n'
+import logo from '@/assets/brand/logo.png'
 import { persistCurrent } from '@/app/project-io'
 import { useAppStore } from '@/store/app-store'
 import { runEditCommand } from '@/ui/editor/edit-actions'
 import { EditorScreen } from '@/ui/editor/EditorScreen'
 import { HomeScreen } from '@/ui/home/HomeScreen'
 import { NewProjectDialog } from '@/ui/home/NewProjectDialog'
+import { titlebarMaximizeIfEmpty } from '@/ui/chrome/WindowControls'
+import { SetupWizard } from '@/ui/home/SetupWizard'
 
 export function App() {
   const { t, i18n } = useTranslation()
@@ -15,6 +18,8 @@ export function App() {
   const resolvedTheme = useAppStore((s) => s.resolvedTheme)
   const locale = useAppStore((s) => s.locale)
   const wizardOpen = useAppStore((s) => s.wizardOpen)
+  const setupComplete = useAppStore((s) => s.setupComplete)
+  const busy = useAppStore((s) => s.busy)
   const toast = useAppStore((s) => s.toast)
 
   useEffect(() => {
@@ -40,20 +45,24 @@ export function App() {
           themePref: 'system',
           resolvedTheme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
           locale: 'tr',
-          recents: []
+          recents: [],
+          setupComplete: true
         })
         return
       }
-      const [settings, resolved, library] = await Promise.all([
+      const [settings, resolved, setup] = await Promise.all([
         window.ivec.getSettings(),
         window.ivec.getResolvedTheme(),
-        window.ivec.listLibraryProjects()
+        window.ivec.getSetupState()
       ])
+      const library = setup.setupComplete ? await window.ivec.listLibraryProjects() : []
       useAppStore.getState().hydrate({
         themePref: settings.theme,
         resolvedTheme: resolved,
         locale: settings.locale,
-        recents: [...new Set([...library, ...settings.recents])]
+        recents: [...new Set([...library, ...settings.recents])],
+        setupComplete: setup.setupComplete,
+        projectsDir: setup.projectsDir
       })
       unsub = window.ivec.onThemeChange((theme) => useAppStore.getState().setResolvedTheme(theme))
     }
@@ -82,7 +91,7 @@ export function App() {
   useEffect(() => {
     const onMenu = (event: Event) => {
       const detail = (event as CustomEvent<string>).detail
-      if (detail === 'new') useAppStore.getState().openWizard(true)
+      if (detail === 'new' && !useAppStore.getState().busy) useAppStore.getState().openWizard(true)
       if (detail === 'open') void openProject()
       if (detail === 'save') void saveProject()
       if (detail === 'cycleTheme') void cycleTheme()
@@ -106,7 +115,7 @@ export function App() {
       }
       if (mod && event.key.toLowerCase() === 'n') {
         event.preventDefault()
-        useAppStore.getState().openWizard(true)
+        if (!useAppStore.getState().busy) useAppStore.getState().openWizard(true)
       }
     }
     window.addEventListener('ivec:menu', onMenu)
@@ -118,13 +127,37 @@ export function App() {
   }, [])
 
   if (!ready) {
-    return <div className="grid h-full place-items-center text-muted">{t('app.name')}</div>
+    return (
+      <div className="app-drag grid h-full place-items-center bg-app text-muted" onDoubleClick={titlebarMaximizeIfEmpty}>
+        {t('app.name')}
+      </div>
+    )
+  }
+
+  if (!setupComplete) {
+    return <SetupWizard />
   }
 
   return (
     <div className="h-full">
       {route === 'home' ? <HomeScreen onOpen={() => void openProject()} /> : <EditorScreen onSave={() => void saveProject()} />}
       {wizardOpen ? <NewProjectDialog /> : null}
+      {busy && route === 'home' ? (
+        <div className="fixed inset-0 z-[80] grid place-items-center bg-app">
+          <div className="flex flex-col items-center gap-4">
+            <img src={logo} alt="" className="size-12 rounded" />
+            <div className="size-8 animate-spin rounded-full border-2 border-line border-t-accent" />
+            <div className="text-center">
+              <div className="text-[14px] font-medium text-ink">
+                {busy === 'opening' ? t('home.opening') : t('home.creating')}
+              </div>
+              <div className="mt-1 text-[12px] text-muted">
+                {busy === 'opening' ? t('home.openingHint') : t('home.creatingHint')}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {toast ? (
         <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-md border border-line bg-panel px-3 py-1.5 text-[12px] text-ink">
           {toast.message}

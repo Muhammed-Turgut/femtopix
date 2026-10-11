@@ -21,6 +21,7 @@ export type ToolId =
 
 export type LeftTab = 'layers' | 'screens' | 'assets' | 'components' | 'gallery'
 export type Route = 'home' | 'editor'
+export type BusyKind = 'creating' | 'opening' | null
 
 interface Toast {
   id: number
@@ -37,12 +38,17 @@ interface AppState {
   resolvedTheme: ResolvedTheme
   locale: Locale
   recents: string[]
+  setupComplete: boolean
+  projectsDir: string | null
   tool: ToolId
   leftTab: LeftTab
   activeScreenId: string | null
   selectedIds: string[]
   toast: Toast | null
   wizardOpen: boolean
+  galleryOpen: boolean
+  galleryAnchor: { x: number; y: number } | null
+  busy: BusyKind
   past: IvecDocument[]
   future: IvecDocument[]
 }
@@ -53,12 +59,19 @@ interface AppActions {
     resolvedTheme: ResolvedTheme
     locale: Locale
     recents: string[]
+    setupComplete?: boolean
+    projectsDir?: string | null
   }) => void
+  finishSetup: (projectsDir: string, recents: string[]) => void
   setResolvedTheme: (theme: ResolvedTheme) => void
   setThemePref: (pref: ThemePreference) => void
   setLocale: (locale: Locale) => void
   cycleTheme: () => ThemePreference
   openWizard: (open: boolean) => void
+  openGallery: (anchor?: { x: number; y: number } | null) => void
+  closeGallery: () => void
+  setBusy: (busy: BusyKind) => void
+  setRecents: (recents: string[]) => void
   goHome: () => void
   createProject: (input: {
     name: string
@@ -101,12 +114,17 @@ export const useAppStore = create<AppState & AppActions>()(
     resolvedTheme: 'dark',
     locale: 'tr',
     recents: [],
+    setupComplete: true,
+    projectsDir: null,
     tool: 'select',
     leftTab: 'layers',
     activeScreenId: null,
     selectedIds: [],
     toast: null,
     wizardOpen: false,
+    galleryOpen: false,
+    galleryAnchor: null,
+    busy: null,
     past: [],
     future: [],
 
@@ -117,6 +135,15 @@ export const useAppStore = create<AppState & AppActions>()(
         state.resolvedTheme = payload.resolvedTheme
         state.locale = payload.locale
         state.recents = payload.recents
+        state.setupComplete = payload.setupComplete ?? true
+        state.projectsDir = payload.projectsDir ?? null
+      }),
+
+    finishSetup: (projectsDir, recents) =>
+      set((state) => {
+        state.setupComplete = true
+        state.projectsDir = projectsDir
+        state.recents = recents
       }),
 
     setResolvedTheme: (theme) =>
@@ -146,6 +173,30 @@ export const useAppStore = create<AppState & AppActions>()(
     openWizard: (open) =>
       set((state) => {
         state.wizardOpen = open
+      }),
+
+    openGallery: (anchor) =>
+      set((state) => {
+        state.galleryOpen = true
+        state.galleryAnchor = anchor ?? null
+        state.tool = 'image'
+      }),
+
+    closeGallery: () =>
+      set((state) => {
+        state.galleryOpen = false
+        state.galleryAnchor = null
+        if (state.tool === 'image') state.tool = 'select'
+      }),
+
+    setBusy: (busy) =>
+      set((state) => {
+        state.busy = busy
+      }),
+
+    setRecents: (recents) =>
+      set((state) => {
+        state.recents = recents
       }),
 
     goHome: () =>
@@ -178,6 +229,7 @@ export const useAppStore = create<AppState & AppActions>()(
         state.activeScreenId = document.screens[0]?.id ?? null
         state.selectedIds = []
         state.recents = [path, ...state.recents.filter((item) => item !== path)].slice(0, 12)
+        state.wizardOpen = false
         state.past = []
         state.future = []
       })
@@ -185,14 +237,19 @@ export const useAppStore = create<AppState & AppActions>()(
 
     markSaved: (path) =>
       set((state) => {
+        const previous = state.filePath
         state.filePath = path
         state.dirty = false
-        state.recents = [path, ...state.recents.filter((item) => item !== path)].slice(0, 12)
+        state.recents = [path, ...state.recents.filter((item) => item !== path && item !== previous)].slice(0, 12)
       }),
 
     setTool: (tool) =>
       set((state) => {
         state.tool = tool
+        if (tool === 'image') {
+          state.galleryOpen = true
+          state.galleryAnchor = null
+        }
       }),
 
     setLeftTab: (tab) =>

@@ -65,12 +65,20 @@ textarea,
 
 .pixel-grid {
   background-image:
-    linear-gradient(to right, #ffffff10 1px, transparent 1px),
-    linear-gradient(to bottom, #ffffff10 1px, transparent 1px);
-  background-size: var(--cell, 6px) var(--cell, 6px);
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size: var(--cell, 16px) var(--cell, 16px);
 }
 
 .scrollbar-thin {
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;
+}
+
+.app-drag {
+  -webkit-app-region: drag;
+}
+
+.app-no-drag {
+  -webkit-app-region: no-drag;
 }

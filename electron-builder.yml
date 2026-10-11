@@ -20,9 +20,21 @@ win:
     - nsis
   icon: electron/resources/icon.png
   artifactName: ${name}-${version}-windows-${arch}.${ext}
+  signAndEditExecutable: false
 nsis:
   oneClick: false
+  perMachine: false
   allowToChangeInstallationDirectory: true
+  allowElevation: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: femtopix
+  uninstallDisplayName: femtopix
+  runAfterFinish: true
+  deleteAppDataOnUninstall: false
+  installerLanguages:
+    - tr_TR
+    - en_US
   artifactName: ${name}-${version}-windows-setup-${arch}.${ext}
 portable:
   artifactName: ${name}-${version}-windows-portable-${arch}.${ext}

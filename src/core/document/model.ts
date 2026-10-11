@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { getProfile } from '@/core/devices/profiles'
+import { normalizeTextNodes } from '@/core/fonts/bitmap-font'
 
 export const APP_VERSION = '0.1.0'
 
@@ -68,7 +69,10 @@ export interface SceneNode {
   font?: string
   fill?: boolean
   stroke?: number
+  radius?: number
   asset?: string
+  frames?: string[]
+  fps?: number
   opacity?: number
   flipX?: boolean
   flipY?: boolean
@@ -140,7 +144,10 @@ const nodeSchema: z.ZodType<SceneNode> = z.lazy(() =>
     font: z.string().optional(),
     fill: z.boolean().optional(),
     stroke: z.number().optional(),
+    radius: z.number().optional(),
     asset: z.string().optional(),
+    frames: z.array(z.string()).optional(),
+    fps: z.number().optional(),
     opacity: z.number().optional(),
     flipX: z.boolean().optional(),
     flipY: z.boolean().optional(),
@@ -364,6 +371,7 @@ export function parseDocument(raw: string): IvecDocument {
   if (!parsed.success) {
     throw new Error('invalid_schema')
   }
+  for (const screen of parsed.data.screens) normalizeTextNodes(screen.children, parsed.data.device.library)
   return parsed.data
 }
 

@@ -9,7 +9,11 @@ import { Button, Field, Input } from '@/ui/primitives'
 
 export function NewProjectDialog() {
   const { t } = useTranslation()
-  const close = () => useAppStore.getState().openWizard(false)
+  const busy = useAppStore((s) => s.busy)
+  const close = () => {
+    if (useAppStore.getState().busy) return
+    useAppStore.getState().openWizard(false)
+  }
   const [name, setName] = useState('')
   const [profileId, setProfileId] = useState('ssd1306-128x64')
   const [library, setLibrary] = useState<ExportTarget>('u8g2')
@@ -110,9 +114,12 @@ export function NewProjectDialog() {
           </div>
 
           <div className="flex justify-end gap-2 pt-1">
-            <Button onClick={close}>{t('wizard.cancel')}</Button>
+            <Button disabled={Boolean(busy)} onClick={close}>
+              {t('wizard.cancel')}
+            </Button>
             <Button
               tone="primary"
+              disabled={Boolean(busy)}
               onClick={() =>
                 void createAndPersistProject({
                   name: name.trim() || t('editor.untitled'),
@@ -123,7 +130,7 @@ export function NewProjectDialog() {
                 })
               }
             >
-              {t('wizard.create')}
+              {busy === 'creating' ? t('wizard.creating') : t('wizard.create')}
             </Button>
           </div>
         </div>

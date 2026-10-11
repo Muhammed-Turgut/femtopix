@@ -27,6 +27,44 @@ export class PixelBuffer {
     for (let y = top; y <= bottom; y += 1) this.set(x, y, rgb)
   }
 
+  fillRoundRect(x: number, y: number, w: number, h: number, radius: number, rgb = 0xffffff): void {
+    const width = Math.max(1, Math.round(w))
+    const height = Math.max(1, Math.round(h))
+    const x0 = Math.round(x)
+    const y0 = Math.round(y)
+    const rr = clampCornerRadius(width, height, radius)
+    if (rr <= 0) {
+      this.fillRect(x0, y0, width, height, rgb)
+      return
+    }
+    const xl = x0 + rr
+    const xr = x0 + width - rr - 1
+    const yu = y0 + rr
+    const yl = y0 + height - rr - 1
+    this.fillRect(xl, y0, xr - xl + 1, height, rgb)
+    this.fillRect(x0, yu, width, yl - yu + 1, rgb)
+    const d = rr * 2 + 1
+    this.ellipse(xl - rr, yu - rr, d, d, true, rgb)
+    this.ellipse(xr - rr, yu - rr, d, d, true, rgb)
+    this.ellipse(xl - rr, yl - rr, d, d, true, rgb)
+    this.ellipse(xr - rr, yl - rr, d, d, true, rgb)
+  }
+
+  strokeRoundRect(x: number, y: number, w: number, h: number, radius: number, stroke = 1, rgb = 0xffffff): void {
+    const width = Math.max(1, Math.round(w))
+    const height = Math.max(1, Math.round(h))
+    const x0 = Math.round(x)
+    const y0 = Math.round(y)
+    const thick = Math.max(1, Math.round(stroke))
+    for (let i = 0; i < thick; i += 1) {
+      const inset = i
+      const rw = width - inset * 2
+      const rh = height - inset * 2
+      if (rw < 1 || rh < 1) break
+      this.strokeRoundRectOnce(x0 + inset, y0 + inset, rw, rh, Math.max(0, clampCornerRadius(width, height, radius) - inset), rgb)
+    }
+  }
+
   fillRect(x: number, y: number, w: number, h: number, rgb = 0xffffff): void {
     const x0 = Math.round(x)
     const y0 = Math.round(y)
@@ -74,32 +112,66 @@ export class PixelBuffer {
     }
   }
 
-  ellipse(x: number, y: number, w: number, h: number, fill: boolean, rgb = 0xffffff): void {
+  private strokeRoundRectOnce(x0: number, y0: number, width: number, height: number, rr: number, rgb: number): void {
+    if (rr <= 0) {
+      this.strokeRect(x0, y0, width, height, 1, rgb)
+      return
+    }
+    const xl = x0 + rr
+    const xr = x0 + width - rr - 1
+    const yu = y0 + rr
+    const yl = y0 + height - rr - 1
+    this.hline(xl, xr, y0, rgb)
+    this.hline(xl, xr, y0 + height - 1, rgb)
+    this.vline(x0, yu, yl, rgb)
+    this.vline(x0 + width - 1, yu, yl, rgb)
+    const d = rr * 2 + 1
+    this.ellipse(xl - rr, yu - rr, d, d, false, rgb, (px, py, cx, cy) => px <= cx && py <= cy)
+    this.ellipse(xr - rr, yu - rr, d, d, false, rgb, (px, py, cx, cy) => px >= cx && py <= cy)
+    this.ellipse(xl - rr, yl - rr, d, d, false, rgb, (px, py, cx, cy) => px <= cx && py >= cy)
+    this.ellipse(xr - rr, yl - rr, d, d, false, rgb, (px, py, cx, cy) => px >= cx && py >= cy)
+  }
+
+  ellipse(
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    fill: boolean,
+    rgb = 0xffffff,
+    keep?: (px: number, py: number, cx: number, cy: number) => boolean
+  ): void {
     const width = Math.max(1, Math.round(w))
     const height = Math.max(1, Math.round(h))
     const rx = Math.max(0, Math.floor((width - 1) / 2))
     const ry = Math.max(0, Math.floor((height - 1) / 2))
     const cx = Math.round(x) + rx
     const cy = Math.round(y) + ry
+    const plot = (px: number, py: number) => {
+      if (keep && !keep(px, py, cx, cy)) return
+      this.set(px, py, rgb)
+    }
     if (rx === 0 && ry === 0) {
-      this.set(cx, cy, rgb)
+      plot(cx, cy)
       return
     }
     for (let py = -ry; py <= ry; py += 1) {
       const t = ry === 0 ? 1 : 1 - (py * py) / (ry * ry)
       const dx = t <= 0 ? 0 : Math.floor(rx * Math.sqrt(t) + 1e-6)
-      if (fill) this.hline(cx - dx, cx + dx, cy + py, rgb)
-      else {
-        this.set(cx - dx, cy + py, rgb)
-        this.set(cx + dx, cy + py, rgb)
+      if (fill && !keep) this.hline(cx - dx, cx + dx, cy + py, rgb)
+      else if (fill) {
+        for (let px = cx - dx; px <= cx + dx; px += 1) plot(px, cy + py)
+      } else {
+        plot(cx - dx, cy + py)
+        plot(cx + dx, cy + py)
       }
     }
     if (!fill) {
       for (let px = -rx; px <= rx; px += 1) {
         const t = rx === 0 ? 1 : 1 - (px * px) / (rx * rx)
         const dy = t <= 0 ? 0 : Math.floor(ry * Math.sqrt(t) + 1e-6)
-        this.set(cx + px, cy - dy, rgb)
-        this.set(cx + px, cy + dy, rgb)
+        plot(cx + px, cy - dy)
+        plot(cx + px, cy + dy)
       }
     }
   }
@@ -167,4 +239,8 @@ export class PixelBuffer {
       }
     }
   }
+}
+
+export function clampCornerRadius(w: number, h: number, radius: number): number {
+  return Math.max(0, Math.min(Math.round(radius), Math.floor((Math.max(1, w) - 1) / 2), Math.floor((Math.max(1, h) - 1) / 2)))
 }

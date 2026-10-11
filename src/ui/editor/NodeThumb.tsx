@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { SceneNode } from '@/core/document/model'
+import { animatedAsset } from '@/core/gallery/animations'
 import { rgbaToMono, type MonoBitmap } from '@/core/render/draw-node'
 import { nodeBounds, rasterizeNode } from '@/core/render/raster-node'
 
@@ -18,8 +19,12 @@ function sampleMono(source: CanvasImageSource, w: number, h: number): MonoBitmap
 function loadMono(src: string, w: number, h: number): Promise<MonoBitmap> {
   return new Promise((resolve, reject) => {
     const image = new Image()
-    image.decoding = 'async'
-    image.onload = () => resolve(sampleMono(image, w, h))
+    const finish = () => resolve(sampleMono(image, w, h))
+    image.onload = () => {
+      const decoded = image.decode?.()
+      if (decoded) void decoded.then(finish).catch(finish)
+      else finish()
+    }
     image.onerror = () => reject(new Error('image'))
     image.src = src
   })
@@ -30,26 +35,21 @@ export function NodeThumb({ node, size = 32 }: { node: SceneNode; size?: number 
 
   useEffect(() => {
     let cancelled = false
-    const paint = async () => {
+    let timer = 0
+    const sources = node.type === 'image' ? (node.frames?.length ? node.frames : node.asset ? [node.asset] : []) : []
+    const { w, h } = nodeBounds(node)
+    const bitmaps = new Map<string, MonoBitmap>()
+    const paint = () => {
       const canvas = ref.current
-      if (!canvas) return
+      if (!canvas || cancelled) return
       canvas.width = size
       canvas.height = size
       const ctx = canvas.getContext('2d')
       if (!ctx) return
       ctx.imageSmoothingEnabled = false
       ctx.clearRect(0, 0, size, size)
-      const bitmaps = new Map<string, MonoBitmap>()
-      const { w, h } = nodeBounds(node)
-      if (node.type === 'image' && node.asset) {
-        try {
-          bitmaps.set(`${node.asset}:${w}x${h}`, await loadMono(node.asset, w, h))
-        } catch {
-          /* keep empty thumb */
-        }
-      }
-      if (cancelled) return
-      const buffer = rasterizeNode(node, bitmaps)
+      const asset = animatedAsset(node, Date.now())
+      const buffer = rasterizeNode(asset && asset !== node.asset ? { ...node, asset } : node, bitmaps)
       const image = ctx.createImageData(size, size)
       for (let py = 0; py < size; py += 1) {
         const sy = Math.min(buffer.height - 1, Math.floor((py * buffer.height) / size))
@@ -66,9 +66,25 @@ export function NodeThumb({ node, size = 32 }: { node: SceneNode; size?: number 
       }
       ctx.putImageData(image, 0, 0)
     }
-    void paint()
+    void Promise.all(
+      sources.map(async (src) => {
+        try {
+          bitmaps.set(`${src}:${w}x${h}`, await loadMono(src, w, h))
+        } catch {
+          /* keep empty thumb */
+        }
+      })
+    ).then(() => {
+      if (cancelled) return
+      paint()
+      if (sources.length > 1) {
+        const ms = Math.max(70, Math.round(1000 / Math.max(1, node.fps ?? 8)))
+        timer = window.setInterval(paint, ms)
+      }
+    })
     return () => {
       cancelled = true
+      window.clearInterval(timer)
     }
   }, [node, size])
 

@@ -82,6 +82,20 @@ export function groupGallery(
     .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id, 'en'))
 }
 
+export function filterGalleryIcons(
+  categories: GalleryCategory[],
+  query: string,
+  categoryId: string | 'all'
+): GalleryIcon[] {
+  const needle = query.trim().toLocaleLowerCase('tr')
+  const source =
+    categoryId === 'all' ? categories.flatMap((category) => category.icons) : categories.find((category) => category.id === categoryId)?.icons ?? []
+  if (!needle) return source
+  return source.filter(
+    (icon) => icon.name.toLocaleLowerCase('tr').includes(needle) || icon.file.toLocaleLowerCase('tr').includes(needle)
+  )
+}
+
 export function loadGallery(): GalleryCategory[] {
   const images = import.meta.glob('../../../gallery/*/*.svg', {
     eager: true,

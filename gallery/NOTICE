@@ -1,0 +1,34 @@
+Bundled gallery icons come from these open-source sets.
+
+HackerNoon Pixel Icon Library 1.1.0
+https://www.npmjs.com/package/@hackernoon/pixel-icon-library
+https://pixeliconlibrary.com
+Copyright (c) HackerNoon — CC BY 4.0
+https://creativecommons.org/licenses/by/4.0/
+No modifications to the SVG artwork.
+
+Pixelarticons 2.4.1
+https://github.com/halfmage/pixelarticons
+Copyright (c) 2019 Gerrit Halfmann — MIT
+Free set only (1036 icons). No modifications to the SVG artwork.
+
+Kenney Game Icons / Kenney Icon Font
+https://kenney.nl/assets/game-icons
+https://github.com/nicodinh/kenney-icon-font
+Created by Kenney.nl — CC0 1.0
+https://creativecommons.org/publicdomain/zero/1.0/
+
+Pixel UI animations in gallery/animations/:
+
+- Original 16×16 loops (spinner, wifi, battery, heart, …) made for femtopix.
+- OpenGameArt CC0 packs in gallery/animations/oga-*:
+  - AV Reference — Loading 16x16 (loading_001–016)
+    https://opengameart.org/content/loading-16x16
+  - qubodup — Pixel Art Loading Icon 1
+    https://opengameart.org/content/pixel-art-loading-icon-1
+  - elfy_boo — Simple Heart Animation
+    https://opengameart.org/content/simple-heart-animation
+  - Zoedoz — Animated Hourglass
+    https://opengameart.org/content/animated-hourglass
+  - Alexie — Battery GIF
+    https://opengameart.org/content/battery-gif

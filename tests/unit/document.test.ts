@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { createEmptyDocument, parseDocument, placeholderCode, serializeDocument, toCIdentifier } from '@/core/document/model'
 import { nextAvailableIvecName, safeProjectStem } from '@/shared/project-file'
 import { useAppStore } from '@/store/app-store'
-import { addNode, createNode, duplicateScreen, removeScreen } from '@/ui/editor/document-actions'
+import { headerFileName } from '@/shared/header-file'
+import { addNode, createNode, duplicateScreen, isIconNode, removeScreen } from '@/ui/editor/document-actions'
 
 describe('toCIdentifier', () => {
   it('transliterates Turkish characters and avoids reserved words', () => {
@@ -25,6 +26,26 @@ describe('document round-trip', () => {
     const again = parseDocument(serializeDocument(doc))
     expect(again.meta.name).toBe('gps-tracker')
     expect(again.screens).toHaveLength(1)
+  })
+
+  it('emits rounded-rect calls when a rect has a corner radius', () => {
+    const doc = createEmptyDocument({ name: 'oled', profileId: 'ssd1306-128x64' })
+    doc.screens[0]?.children.push({
+      id: 'r1',
+      type: 'rect',
+      name: 'card',
+      x: 2,
+      y: 4,
+      w: 20,
+      h: 12,
+      visible: true,
+      locked: false,
+      color: 1,
+      fill: true,
+      radius: 3
+    })
+    const code = placeholderCode(doc, doc.screens[0]!)
+    expect(code).toContain('u8g2.drawRBox(2, 4, 20, 12, 3);')
   })
 
   it('emits u8g2 calls for visible layers', () => {
@@ -92,6 +113,95 @@ describe('document round-trip', () => {
     expect(code).toContain('d.drawRect(2, 3, 20, 12, 0x001f);')
   })
 
+  it('fits leftover space on stored text when the file is opened', () => {
+    const doc = createEmptyDocument({ name: 'oled', profileId: 'ssd1306-128x64' })
+    doc.screens[0]?.children.push({
+      id: 't0',
+      type: 'text',
+      name: 'Metin',
+      x: 0,
+      y: 0,
+      w: 40,
+      h: 10,
+      visible: true,
+      locked: false,
+      color: 1,
+      text: 'Metin'
+    })
+    const again = parseDocument(serializeDocument(doc))
+    const node = again.screens[0]?.children[0]
+    expect(node?.w).toBe(30)
+    expect(node?.h).toBe(10)
+    expect(node?.font).toBe('6x10')
+  })
+
+  it('emits u8g2 drawStr from the text baseline', () => {
+    const doc = createEmptyDocument({ name: 'oled', profileId: 'ssd1306-128x64' })
+    doc.screens[0]?.children.push({
+      id: 't1',
+      type: 'text',
+      name: 'label',
+      x: 4,
+      y: 6,
+      w: 30,
+      h: 10,
+      visible: true,
+      locked: false,
+      color: 1,
+      text: 'Metin',
+      font: '6x10'
+    })
+    const code = placeholderCode(doc, doc.screens[0]!)
+    expect(code).toContain('u8g2.setFont(u8g2_font_6x10_tr);')
+    expect(code).not.toContain('setFontPosTop')
+    expect(code).toContain('u8g2.drawStr(4, 14, "Metin");')
+  })
+
+  it('emits a millis frame index for animated images', () => {
+    const doc = createEmptyDocument({ name: 'oled', profileId: 'ssd1306-128x64' })
+    doc.screens[0]?.children.push({
+      id: 'a1',
+      type: 'image',
+      name: 'spinner',
+      x: 8,
+      y: 8,
+      w: 16,
+      h: 16,
+      visible: true,
+      locked: false,
+      color: 1,
+      asset: 'data:image/svg+xml,0',
+      frames: ['data:image/svg+xml,0', 'data:image/svg+xml,1', 'data:image/svg+xml,2'],
+      fps: 8
+    })
+    const code = placeholderCode(doc, doc.screens[0]!)
+    expect(code).toContain('#include "spinner.h"')
+    expect(code).toContain('spinner_frames')
+    expect(code).toContain('u8g2.drawXBMP(8, 8, 16, 16, spinner_frames[(millis() / 125) % 3]);')
+  })
+
+  it('emits GFX text size for a scaled 5x7 font', () => {
+    const doc = createEmptyDocument({ name: 'tft', profileId: 'st7789-240x240' })
+    doc.device.library = 'adafruit_gfx'
+    doc.screens[0]?.children.push({
+      id: 't2',
+      type: 'text',
+      name: 'label',
+      x: 2,
+      y: 4,
+      w: 12,
+      h: 16,
+      visible: true,
+      locked: false,
+      color: 1,
+      text: 'Hi',
+      font: '5x7x2'
+    })
+    const code = placeholderCode(doc, doc.screens[0]!)
+    expect(code).toContain('d.setTextSize(2);')
+    expect(code).toContain('d.print("Hi");')
+  })
+
   it('emits drawPixel calls for a paint stroke', () => {
     const doc = createEmptyDocument({ name: 'oled', profileId: 'ssd1306-128x64' })
     doc.screens[0]?.children.push({
@@ -121,6 +231,21 @@ describe('document round-trip', () => {
   it('rejects a file that is not ivec', () => {
     expect(() => parseDocument('{"hello":true}')).toThrow('invalid_schema')
     expect(() => parseDocument('{')).toThrow('invalid_json')
+  })
+})
+
+describe('icon headers', () => {
+  it('keeps only a .h file name', () => {
+    expect(headerFileName('wifi.svg')).toBe('wifi.h')
+    expect(headerFileName('../x/cloud')).toBe('cloud.h')
+    expect(headerFileName('2home.h')).toBe('_2home.h')
+  })
+
+  it('exports images and paint as icons, not shapes', () => {
+    expect(isIconNode(createNode('image', 'icon', { x: 0, y: 0, w: 16, h: 16 }))).toBe(true)
+    expect(isIconNode(createNode('paint', 'dots', { x: 0, y: 0, w: 8, h: 8 }))).toBe(true)
+    expect(isIconNode(createNode('rect', 'box', { x: 0, y: 0, w: 8, h: 8 }))).toBe(false)
+    expect(isIconNode(createNode('text', 'label', { x: 0, y: 0, w: 12, h: 8 }))).toBe(false)
   })
 })
 
