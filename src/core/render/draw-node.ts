@@ -1,4 +1,5 @@
 import { fillRgb, strokeRgb } from '@/core/color/rgb565'
+import { paintPoints } from '@/core/document/paint'
 import type { SceneNode } from '@/core/document/model'
 import { PixelBuffer } from '@/core/render/pixel-buffer'
 
@@ -49,6 +50,11 @@ export function drawNode(buffer: PixelBuffer, node: SceneNode, bitmaps: Map<stri
   const stroke = ((node.stroke ?? 0) > 0 || node.fill === false) && strokeInk !== null
   const { x, y, w, h } = box(node)
 
+  if (node.type === 'paint' && node.points?.length) {
+    if (strokeInk === null) return
+    for (const point of paintPoints(node)) buffer.set(point.x, point.y, strokeInk)
+    return
+  }
   if (node.type === 'line' || node.type === 'polyline' || node.type === 'paint') {
     if (strokeInk === null) return
     const x0 = node.flipX ? node.x + (node.w ?? 0) : node.x

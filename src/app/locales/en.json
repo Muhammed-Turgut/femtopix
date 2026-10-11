@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "ivec draw",
+    "name": "femtopix",
     "tagline": "Design embedded screens, emit code that compiles."
   },
   "home": {
@@ -31,7 +31,7 @@
     "save": "Save",
     "export": "Export",
     "download": "Download",
-    "workspace": "ivec draw",
+    "workspace": "femtopix",
     "layers": "Layers",
     "screens": "Screens",
     "assets": "Assets",

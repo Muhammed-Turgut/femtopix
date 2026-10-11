@@ -29,7 +29,7 @@ export function HomeScreen({ onOpen }: { onOpen: () => void }) {
   return (
     <div className="flex h-full flex-col bg-app">
       <header className="flex h-10 items-center gap-3 border-b border-line px-3">
-        <img src={logo} alt="" className="size-5 rounded" />
+        <img src={logo} alt="" className="size-6 rounded" />
         <div className="text-[13px] font-semibold">{t('app.name')}</div>
         <div className="relative max-w-sm flex-1">
           <Search size={16} strokeWidth={1.5} className="pointer-events-none absolute top-1.5 left-2 text-muted" />

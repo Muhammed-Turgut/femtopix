@@ -39,6 +39,7 @@ export function Toolbar() {
       <Rule />
       <div className="relative flex items-center">
         <Tooltip
+          side="bottom"
           content={
             <span className="flex items-center gap-1">
               {t(`tools.${shape}`)} <Kbd>{SHAPES.find((item) => item.id === shape)?.key}</Kbd>
@@ -93,6 +94,7 @@ function ToolButton({ id, shortcut, icon: Icon }: { id: ToolId; shortcut: string
   const tool = useAppStore((s) => s.tool)
   return (
     <Tooltip
+      side="bottom"
       content={
         <span className="flex items-center gap-1">
           {t(`tools.${id}`)} <Kbd>{shortcut}</Kbd>

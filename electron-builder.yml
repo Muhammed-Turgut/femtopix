@@ -1,6 +1,6 @@
-appId: com.ivec.draw
-productName: ivec draw
-copyright: Copyright © 2026 ivec
+appId: com.femtopix.app
+productName: femtopix
+copyright: Copyright © 2026 femtopix
 directories:
   output: dist
   buildResources: electron/resources
@@ -16,10 +16,14 @@ linux:
   icon: electron/resources/icon.png
 win:
   target:
+    - zip
     - nsis
-    - portable
   icon: electron/resources/icon.png
+  artifactName: ${name}-${version}-windows-${arch}.${ext}
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
+  artifactName: ${name}-${version}-windows-setup-${arch}.${ext}
+portable:
+  artifactName: ${name}-${version}-windows-portable-${arch}.${ext}
 artifactName: ${name}-${version}-${os}-${arch}.${ext}

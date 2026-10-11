@@ -54,7 +54,7 @@ export function CodePanel() {
   const layersKey = screen
     ? screen.children
         .map((node) =>
-          [node.id, node.type, node.name, node.x, node.y, node.w, node.h, node.visible, node.color, node.strokeColor, node.fill, node.stroke, node.text, node.font, node.role, node.flipX, node.flipY, node.asset].join(':')
+          [node.id, node.type, node.name, node.x, node.y, node.w, node.h, node.visible, node.color, node.strokeColor, node.fill, node.stroke, node.text, node.font, node.role, node.flipX, node.flipY, node.asset, node.points?.length].join(':')
         )
         .join('|')
     : ''

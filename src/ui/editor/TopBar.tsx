@@ -30,7 +30,7 @@ export function TopBar({ onSave, onHelp }: { onSave: () => void; onHelp: () => v
     <header className="grid h-10 shrink-0 grid-cols-[1fr_auto_1fr] items-center border-b border-line bg-panel px-3">
       <div className="flex items-center gap-2">
         <button type="button" className="flex items-center gap-2" onClick={() => useAppStore.getState().goHome()}>
-          <img src={logo} alt="" className="size-5 rounded" />
+          <img src={logo} alt="" className="size-6 rounded" />
           <span className="text-[13px] font-semibold">{t('editor.workspace')}</span>
         </button>
       </div>

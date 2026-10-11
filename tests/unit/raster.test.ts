@@ -124,6 +124,32 @@ describe('rgb565', () => {
     expect(at(buffer, 0, 0)).toBe(0xff0000f8)
     expect(at(buffer, 4, 3)).toBe(0xff0000f8)
   })
+
+  it('paints discrete pixels for a paint stroke', async () => {
+    const { rasterizeNode } = await import('@/core/render/raster-node')
+    const node: SceneNode = {
+      id: 'n4',
+      type: 'paint',
+      name: 'dots',
+      x: 1,
+      y: 1,
+      w: 3,
+      h: 2,
+      visible: true,
+      locked: false,
+      color: 1,
+      fill: false,
+      stroke: 1,
+      points: [
+        { x: 0, y: 0 },
+        { x: 2, y: 1 }
+      ]
+    }
+    const buffer = rasterizeNode(node)
+    expect(at(buffer, 0, 0)).toBe(0xffffffff)
+    expect(at(buffer, 2, 1)).toBe(0xffffffff)
+    expect(at(buffer, 1, 0)).toBe(0)
+  })
 })
 
 describe('arrange', () => {

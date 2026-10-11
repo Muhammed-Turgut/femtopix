@@ -1,5 +1,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { bresenhamPixels } from '@/core/document/paint'
 import type { SceneNode } from '@/core/document/model'
 import { useAppStore, type ToolId } from '@/store/app-store'
 import { addNode, createNode, patchNode, removeNodes, renameScreen, setSelectedIds } from '@/ui/editor/document-actions'
@@ -9,7 +10,7 @@ import { LayerPreview } from '@/ui/editor/LayerPreview'
 const MIN_ZOOM = 1
 const MAX_ZOOM = 64
 const DRAW_TOOLS = new Set<ToolId>(['rect', 'ellipse', 'line', 'triangle', 'polygon', 'text', 'pencil', 'eraser', 'image'])
-const SHAPE_TOOLS = new Set<ToolId>(['rect', 'ellipse', 'line', 'triangle', 'polygon', 'pencil'])
+const SHAPE_TOOLS = new Set<ToolId>(['rect', 'ellipse', 'line', 'triangle', 'polygon'])
 const TOOL_KEYS: Record<string, ToolId> = {
   v: 'select',
   h: 'hand',
@@ -54,6 +55,20 @@ function boxOf(a: { x: number; y: number }, b: { x: number; y: number }) {
     w: Math.max(1, Math.abs(b.x - a.x)),
     h: Math.max(1, Math.abs(b.y - a.y))
   }
+}
+
+function paintNodeFromPixels(name: string, pixels: { x: number; y: number }[], color: SceneNode['color']): SceneNode | null {
+  if (!pixels.length) return null
+  const x = Math.min(...pixels.map((pixel) => pixel.x))
+  const y = Math.min(...pixels.map((pixel) => pixel.y))
+  const w = Math.max(...pixels.map((pixel) => pixel.x)) - x + 1
+  const h = Math.max(...pixels.map((pixel) => pixel.y)) - y + 1
+  return createNode('paint', name, { x, y, w, h }, {
+    color,
+    fill: false,
+    stroke: 1,
+    points: pixels.map((pixel) => ({ x: pixel.x - x, y: pixel.y - y }))
+  })
 }
 
 export const CanvasViewport = forwardRef<HTMLDivElement>(function CanvasViewport(_props, ref) {
@@ -315,9 +330,47 @@ export const CanvasViewport = forwardRef<HTMLDivElement>(function CanvasViewport
       if (nodeId) removeNodes(screenId, [nodeId])
       return
     }
+    if (tool === 'pencil') {
+      const seen = new Set<string>()
+      const pixels: { x: number; y: number }[] = []
+      let last = start
+      const addPixel = (point: { x: number; y: number }) => {
+        const key = `${point.x},${point.y}`
+        if (seen.has(key)) return
+        seen.add(key)
+        pixels.push(point)
+      }
+      addPixel(start)
+      const preview = () => {
+        const node = paintNodeFromPixels(t('tools.pencil'), pixels, drawColor.current)
+        if (node) setDraft(node)
+      }
+      preview()
+      const onMove = (move: PointerEvent) => {
+        const next = clientToDevice(move, frame, zoom, maxW, maxH)
+        for (const pixel of bresenhamPixels(last, next)) addPixel(pixel)
+        last = next
+        preview()
+      }
+      const onUp = () => {
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+        window.removeEventListener('pointercancel', onUp)
+        stopDraw.current = null
+        const node = paintNodeFromPixels(t('tools.pencil'), pixels, drawColor.current)
+        if (node) addNode(screenId, node)
+        setDraft(null)
+      }
+      stopDraw.current?.()
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+      window.addEventListener('pointercancel', onUp)
+      stopDraw.current = onUp
+      return
+    }
     if (!SHAPE_TOOLS.has(tool)) return
 
-    const type: SceneNode['type'] = tool === 'pencil' ? 'line' : (tool as SceneNode['type'])
+    const type = tool as SceneNode['type']
     const name = t(`tools.${tool}`)
 
     const onMove = (move: PointerEvent) => {

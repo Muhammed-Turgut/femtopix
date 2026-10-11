@@ -92,6 +92,32 @@ describe('document round-trip', () => {
     expect(code).toContain('d.drawRect(2, 3, 20, 12, 0x001f);')
   })
 
+  it('emits drawPixel calls for a paint stroke', () => {
+    const doc = createEmptyDocument({ name: 'oled', profileId: 'ssd1306-128x64' })
+    doc.screens[0]?.children.push({
+      id: 'p1',
+      type: 'paint',
+      name: 'dots',
+      x: 2,
+      y: 3,
+      w: 3,
+      h: 1,
+      visible: true,
+      locked: false,
+      color: 1,
+      fill: false,
+      stroke: 1,
+      points: [
+        { x: 0, y: 0 },
+        { x: 2, y: 0 }
+      ]
+    })
+    const code = placeholderCode(doc, doc.screens[0]!)
+    expect(code).toContain('u8g2.drawPixel(2, 3);')
+    expect(code).toContain('u8g2.drawPixel(4, 3);')
+    expect(code).not.toContain('u8g2.drawLine(2, 3')
+  })
+
   it('rejects a file that is not ivec', () => {
     expect(() => parseDocument('{"hello":true}')).toThrow('invalid_schema')
     expect(() => parseDocument('{')).toThrow('invalid_json')

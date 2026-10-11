@@ -5,7 +5,7 @@ import type { AppSettings, Locale, ResolvedTheme, ThemePreference } from '../../
 import { IPC, PROJECT_FILE_MAX_BYTES } from '../../src/shared/api'
 import { nextAvailableIvecName } from '../../src/shared/project-file'
 
-app.setName('ivec-draw')
+app.setName('femtopix')
 
 const SETTINGS_DEFAULTS: AppSettings = {
   theme: 'system',
@@ -113,7 +113,7 @@ function createWindow(): BrowserWindow {
     height: Math.min(920, height),
     minWidth: 1100,
     minHeight: 720,
-    title: 'ivec draw',
+    title: 'femtopix',
     backgroundColor: '#171329',
     show: false,
     autoHideMenuBar: true,
@@ -142,7 +142,7 @@ function createWindow(): BrowserWindow {
 function buildMenu(): void {
   const template: MenuItemConstructorOptions[] = [
     {
-      label: 'ivec draw',
+      label: 'femtopix',
       submenu: [
         { role: 'about' },
         { type: 'separator' },
@@ -191,7 +191,7 @@ function send(channel: string): void {
 
 function registerIpc(): void {
   ipcMain.handle(IPC.getAppInfo, () => ({
-    name: 'ivec draw',
+    name: 'femtopix',
     version: app.getVersion()
   }))
 
@@ -216,7 +216,7 @@ function registerIpc(): void {
   ipcMain.handle(IPC.openProjectDialog, async () => {
     const result = await dialog.showOpenDialog({
       title: 'Proje aç',
-      filters: [{ name: 'ivec draw', extensions: ['ivec', 'json'] }],
+      filters: [{ name: 'femtopix', extensions: ['ivec', 'json'] }],
       properties: ['openFile']
     })
     if (result.canceled || !result.filePaths[0]) return null
@@ -233,7 +233,7 @@ function registerIpc(): void {
     const result = await dialog.showSaveDialog({
       title: 'Projeyi kaydet',
       defaultPath: suggestedName.endsWith('.ivec') ? suggestedName : `${suggestedName}.ivec`,
-      filters: [{ name: 'ivec draw', extensions: ['ivec'] }]
+      filters: [{ name: 'femtopix', extensions: ['ivec'] }]
     })
     return result.canceled || !result.filePath ? null : result.filePath
   })

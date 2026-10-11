@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "ivec draw",
+    "name": "femtopix",
     "tagline": "Gömülü ekranları tasarla, çalışan koda dönüştür."
   },
   "home": {
@@ -31,7 +31,7 @@
     "save": "Kaydet",
     "export": "Dışa aktar",
     "download": "İndir",
-    "workspace": "ivec draw",
+    "workspace": "femtopix",
     "layers": "Katmanlar",
     "screens": "Ekranlar",
     "assets": "Görseller",

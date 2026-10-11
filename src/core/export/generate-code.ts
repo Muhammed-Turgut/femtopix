@@ -1,5 +1,6 @@
 import { isColorDisplay, rgb565Literal } from '@/core/color/rgb565'
 import type { ExportTarget, IvecDocument, SceneNode, Screen } from '@/core/document/model'
+import { paintPoints } from '@/core/document/paint'
 
 interface Flags {
   wrapperFunction: boolean
@@ -88,6 +89,11 @@ function emitU8g2(node: SceneNode, flags: Flags): string[] {
   const fill = wantsFill(node)
   const stroke = wantsStroke(node)
 
+  if (node.type === 'paint' && node.points?.length) {
+    setInk(strokeInk)
+    for (const point of paintPoints(node)) lines.push(`  u8g2.drawPixel(${point.x}, ${point.y});`)
+    return lines
+  }
   if (node.type === 'line' || node.type === 'polyline' || node.type === 'paint') {
     setInk(strokeInk)
     lines.push(`  u8g2.drawLine(${i(node.x)}, ${i(node.y)}, ${i(node.x + (node.w ?? 0))}, ${i(node.y + (node.h ?? 0))});`)
@@ -192,6 +198,10 @@ function emitGfx(node: SceneNode, flags: Flags, fillInk: string, strokeInk: stri
   const fill = wantsFill(node)
   const stroke = wantsStroke(node)
 
+  if (node.type === 'paint' && node.points?.length) {
+    for (const point of paintPoints(node)) lines.push(`  d.drawPixel(${point.x}, ${point.y}, ${strokeInk});`)
+    return lines
+  }
   if (node.type === 'line' || node.type === 'polyline' || node.type === 'paint') {
     lines.push(`  d.drawLine(${i(node.x)}, ${i(node.y)}, ${i(node.x + (node.w ?? 0))}, ${i(node.y + (node.h ?? 0))}, ${strokeInk});`)
     return lines

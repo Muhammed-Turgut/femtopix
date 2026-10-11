@@ -72,6 +72,7 @@ export interface SceneNode {
   opacity?: number
   flipX?: boolean
   flipY?: boolean
+  points?: { x: number; y: number }[]
 }
 
 export interface Screen {
@@ -142,7 +143,8 @@ const nodeSchema: z.ZodType<SceneNode> = z.lazy(() =>
     asset: z.string().optional(),
     opacity: z.number().optional(),
     flipX: z.boolean().optional(),
-    flipY: z.boolean().optional()
+    flipY: z.boolean().optional(),
+    points: z.array(z.object({ x: z.number(), y: z.number() })).optional()
   })
 )
 
@@ -290,7 +292,7 @@ export function createEmptyDocument(options: {
       name: options.name.trim() || 'untitled',
       created,
       modified: created,
-      app: `ivec draw ${APP_VERSION}`
+      app: `femtopix ${APP_VERSION}`
     },
     device: {
       profile: profile.id,
