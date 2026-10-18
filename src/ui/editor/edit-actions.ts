@@ -95,10 +95,32 @@ export function nudgeSelection(dx: number, dy: number): void {
   })
 }
 
+let lastHistoryEdit = 0
+
+function undoDocument(): void {
+  const now = Date.now()
+  if (now - lastHistoryEdit < 40) return
+  lastHistoryEdit = now
+  useAppStore.getState().undo()
+}
+
+function redoDocument(): void {
+  const now = Date.now()
+  if (now - lastHistoryEdit < 40) return
+  lastHistoryEdit = now
+  useAppStore.getState().redo()
+}
+
 export function runEditCommand(command: 'undo' | 'redo' | 'copy' | 'cut' | 'paste' | 'selectAll'): void {
+  if (command === 'undo') {
+    undoDocument()
+    return
+  }
+  if (command === 'redo') {
+    redoDocument()
+    return
+  }
   if (isTypingTarget(document.activeElement)) {
-    if (command === 'undo') document.execCommand('undo')
-    if (command === 'redo') document.execCommand('redo')
     if (command === 'copy') document.execCommand('copy')
     if (command === 'cut') document.execCommand('cut')
     if (command === 'paste') document.execCommand('paste')
@@ -106,8 +128,6 @@ export function runEditCommand(command: 'undo' | 'redo' | 'copy' | 'cut' | 'past
     return
   }
   if (command === 'copy' && hasTextSelection()) return
-  if (command === 'undo') useAppStore.getState().undo()
-  if (command === 'redo') useAppStore.getState().redo()
   if (command === 'copy') {
     if (!copySelection()) copyActiveScreen()
   }
@@ -123,24 +143,15 @@ export function runEditCommand(command: 'undo' | 'redo' | 'copy' | 'cut' | 'past
 }
 
 export function handleEditKey(event: KeyboardEvent): boolean {
-  if (isTypingTarget(event.target)) return false
   const mod = event.ctrlKey || event.metaKey
   const key = event.key.toLowerCase()
-  if (mod && key === 'z' && event.shiftKey) {
+  if (mod && (key === 'z' || key === 'y')) {
     event.preventDefault()
-    useAppStore.getState().redo()
+    if (key === 'y' || event.shiftKey) redoDocument()
+    else undoDocument()
     return true
   }
-  if (mod && key === 'z') {
-    event.preventDefault()
-    useAppStore.getState().undo()
-    return true
-  }
-  if (mod && key === 'y') {
-    event.preventDefault()
-    useAppStore.getState().redo()
-    return true
-  }
+  if (isTypingTarget(event.target)) return false
   if (mod && key === 'c') {
     if (hasTextSelection()) return false
     event.preventDefault()

@@ -62,6 +62,8 @@ describe('bitmap font', () => {
     expect(lit(large)).toBeGreaterThan(lit(small))
     expect(measureText('A', '5x7x2')).toEqual({ w: 12, h: 16 })
     expect(measureText('A', '10x20')).toEqual({ w: 10, h: 20 })
+    expect(measureText('A', '4x6')).toEqual({ w: 5, h: 7 })
+    expect(measureText('A', '3x5')).toEqual({ w: 4, h: 6 })
   })
 
   it('rasterizes text without leftover columns', () => {

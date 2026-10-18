@@ -3,7 +3,7 @@ import { createEmptyDocument, parseDocument, placeholderCode, serializeDocument,
 import { nextAvailableIvecName, safeProjectStem } from '@/shared/project-file'
 import { useAppStore } from '@/store/app-store'
 import { headerFileName } from '@/shared/header-file'
-import { addNode, createNode, duplicateScreen, isIconNode, removeScreen } from '@/ui/editor/document-actions'
+import { addNode, createNode, duplicateScreen, isIconNode, placeImageOnActiveScreen, removeScreen } from '@/ui/editor/document-actions'
 
 describe('toCIdentifier', () => {
   it('transliterates Turkish characters and avoids reserved words', () => {
@@ -217,6 +217,29 @@ describe('document round-trip', () => {
     expect(code).toContain('d.print("Hi");')
   })
 
+  it('emits a smaller GFX font than the built-in 5x7', () => {
+    const doc = createEmptyDocument({ name: 'tft', profileId: 'st7789-240x240' })
+    doc.device.library = 'adafruit_gfx'
+    doc.screens[0]?.children.push({
+      id: 't3',
+      type: 'text',
+      name: 'label',
+      x: 2,
+      y: 4,
+      w: 10,
+      h: 7,
+      visible: true,
+      locked: false,
+      color: '#8cc24a',
+      text: 'Hi',
+      font: '4x6'
+    })
+    const code = placeholderCode(doc, doc.screens[0]!)
+    expect(code).toContain('#include <Fonts/TomThumb.h>')
+    expect(code).toContain('d.setFont(&TomThumb);')
+    expect(code).toContain('d.setCursor(2, 10);')
+  })
+
   it('emits drawPixel calls for a paint stroke', () => {
     const doc = createEmptyDocument({ name: 'oled', profileId: 'ssd1306-128x64' })
     doc.screens[0]?.children.push({
@@ -254,6 +277,17 @@ describe('icon headers', () => {
     expect(headerFileName('wifi.svg')).toBe('wifi.h')
     expect(headerFileName('../x/cloud')).toBe('cloud.h')
     expect(headerFileName('2home.h')).toBe('_2home.h')
+  })
+
+  it('places an icon so the click is its center on both axes', () => {
+    useAppStore.getState().createProject({ name: 't', profileId: 'ssd1306-128x64' })
+    useAppStore.getState().openGallery({ x: 40, y: 20 })
+    placeImageOnActiveScreen('wifi', 'data:image/svg+xml,0', 16)
+    const icon = useAppStore.getState().document?.screens[0]?.children[0]
+    expect(icon?.x).toBe(32)
+    expect(icon?.y).toBe(12)
+    expect(icon?.w).toBe(16)
+    expect(icon?.h).toBe(16)
   })
 
   it('exports images and paint as icons, not shapes', () => {

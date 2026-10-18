@@ -75,9 +75,12 @@ describe('xbm header', () => {
       height: buffer.height,
       bits: packXbm(buffer.data, buffer.width, buffer.height)
     })
+    expect(header).toContain('#ifndef IMAGE_DIKDORTGEN_BITS_H')
+    expect(header).toContain('#include <Arduino.h>')
     expect(header).toContain('#define dikdortgen_width 8')
     expect(header).toContain('#define dikdortgen_height 4')
-    expect(header).toContain('dikdortgen_bits[] PROGMEM')
+    expect(header).toContain('static const unsigned char PROGMEM dikdortgen_bits[]')
+    expect(header.trimEnd().endsWith('#endif')).toBe(true)
   })
 
   it('emits one bitmap per animation frame', () => {
@@ -91,9 +94,10 @@ describe('xbm header', () => {
     })
     expect(header).toContain('#define kalp_frame_count 2')
     expect(header).toContain('#define kalp_fps 8')
-    expect(header).toContain('kalp_0_bits[] PROGMEM')
-    expect(header).toContain('kalp_1_bits[] PROGMEM')
-    expect(header).toContain('kalp_frames[] PROGMEM = { kalp_0_bits, kalp_1_bits }')
+    expect(header).toContain('#include <Arduino.h>')
+    expect(header).toContain('static const unsigned char PROGMEM kalp_0_bits[]')
+    expect(header).toContain('static const unsigned char PROGMEM kalp_1_bits[]')
+    expect(header).toContain('PROGMEM kalp_frames[] = { kalp_0_bits, kalp_1_bits }')
   })
 })
 

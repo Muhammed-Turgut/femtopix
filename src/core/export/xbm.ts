@@ -21,8 +21,13 @@ function formatByteRows(bits: Uint8Array): string[] {
   return rows
 }
 
+function includeGuard(ident: string): string {
+  const body = ident.replace(/[^A-Za-z0-9_]/g, '_').replace(/^_+|_+$/g, '').toUpperCase() || 'ICON'
+  return `IMAGE_${body}_BITS_H`
+}
+
 function formatBitsArray(symbol: string, bits: Uint8Array): string[] {
-  return [`static const unsigned char ${symbol}[] PROGMEM = {`, ...formatByteRows(bits), `};`]
+  return [`static const unsigned char PROGMEM ${symbol}[] = {`, ...formatByteRows(bits), `};`]
 }
 
 export function formatXbmHeader(options: {
@@ -33,12 +38,18 @@ export function formatXbmHeader(options: {
   bits: Uint8Array
 }): string {
   const { ident, name, width, height, bits } = options
+  const guard = includeGuard(ident)
   return [
-    `#pragma once`,
-    `// ${name} — ${width}x${height} XBMP`,
+    `#ifndef ${guard}`,
+    `#define ${guard}`,
+    ``,
+    `#include <Arduino.h>`,
+    ``,
+    `// ${name} — ${width}x${height}`,
     `#define ${ident}_width ${width}`,
     `#define ${ident}_height ${height}`,
     ...formatBitsArray(`${ident}_bits`, bits),
+    `#endif`,
     ``
   ].join('\n')
 }
@@ -52,10 +63,15 @@ export function formatAnimationHeader(options: {
   frames: Uint8Array[]
 }): string {
   const { ident, name, width, height, fps, frames } = options
+  const guard = includeGuard(ident)
   const names = frames.map((_, index) => `${ident}_${index}_bits`)
   const arrays = frames.flatMap((bits, index) => ['', ...formatBitsArray(names[index] ?? `${ident}_${index}_bits`, bits)])
   return [
-    `#pragma once`,
+    `#ifndef ${guard}`,
+    `#define ${guard}`,
+    ``,
+    `#include <Arduino.h>`,
+    ``,
     `// ${name} — ${width}x${height}, ${frames.length} frames @ ${fps} fps`,
     `#define ${ident}_width ${width}`,
     `#define ${ident}_height ${height}`,
@@ -63,7 +79,8 @@ export function formatAnimationHeader(options: {
     `#define ${ident}_fps ${fps}`,
     ...arrays,
     ``,
-    `static const unsigned char* const ${ident}_frames[] PROGMEM = { ${names.join(', ')} };`,
+    `static const unsigned char* const PROGMEM ${ident}_frames[] = { ${names.join(', ')} };`,
+    `#endif`,
     ``
   ].join('\n')
 }

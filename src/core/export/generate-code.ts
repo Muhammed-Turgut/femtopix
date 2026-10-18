@@ -303,9 +303,17 @@ function emitGfx(node: SceneNode, flags: Flags, fillInk: string, strokeInk: stri
     return lines
   }
   if (node.type === 'text') {
-    lines.push(`  d.setCursor(${x}, ${y});`)
+    const font = resolveFont(node.font)
     lines.push(`  d.setTextColor(${fillInk});`)
-    lines.push(`  d.setTextSize(${resolveFont(node.font).gfxSize});`)
+    if (font.gfxFont) {
+      lines.push(`  d.setFont(&${font.gfxFont});`)
+      lines.push(`  d.setTextSize(1);`)
+      lines.push(`  d.setCursor(${x}, ${y + font.ascent});`)
+    } else {
+      lines.push(`  d.setFont();`)
+      lines.push(`  d.setCursor(${x}, ${y});`)
+      lines.push(`  d.setTextSize(${font.gfxSize});`)
+    }
     lines.push(`  d.print(${cString(node.text || node.name)});`)
     return lines
   }
@@ -333,6 +341,17 @@ function emitGfx(node: SceneNode, flags: Flags, fillInk: string, strokeInk: stri
   return lines
 }
 
+function fontIncludes(nodes: SceneNode[], gfx: boolean): string[] {
+  if (!gfx) return []
+  const names = new Set<string>()
+  for (const node of nodes) {
+    if (node.type !== 'text') continue
+    const font = resolveFont(node.font)
+    if (font.gfxFont) names.add(font.gfxFont)
+  }
+  return [...names].map((name) => `#include <Fonts/${name}.h>`)
+}
+
 function imageDecls(nodes: SceneNode[], flags: Flags): string[] {
   if (!flags.declareImages) return []
   const lines: string[] = []
@@ -352,7 +371,7 @@ export function generateCode(document: IvecDocument, screen: Screen): string {
   const { width, height, library } = document.device
   const gfx = isGfx(library)
   const header = `// ${screen.name} — ${width}x${height} ${gfx ? gfxName(library) : 'u8g2'}`
-  const decls = imageDecls(nodes, flags)
+  const decls = [...fontIncludes(nodes, gfx), ...imageDecls(nodes, flags)]
   const body = nodes.flatMap((node) =>
     gfx
       ? emitGfx(node, flags, inkLiteral(document, node.color, gfx), inkLiteral(document, node.strokeColor ?? node.color, gfx))

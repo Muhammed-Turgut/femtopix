@@ -506,12 +506,13 @@ export function placeImageOnActiveScreen(
   const h = Math.min(size, document.device.height)
   const point = origin ?? galleryAnchor
   const shift = screen.children.filter((node) => node.type === 'image').length * 4
+  const clamp = (value: number, span: number, limit: number) => Math.max(0, Math.min(limit - span, Math.round(value)))
   const x = point
-    ? Math.max(0, Math.min(document.device.width - w, point.x))
-    : Math.max(0, Math.min(document.device.width - w, Math.round((document.device.width - w) / 2) + shift))
+    ? clamp(point.x - w / 2, w, document.device.width)
+    : clamp((document.device.width - w) / 2 + shift, w, document.device.width)
   const y = point
-    ? Math.max(0, Math.min(document.device.height - h, point.y))
-    : Math.max(0, Math.min(document.device.height - h, Math.round((document.device.height - h) / 2) + shift))
+    ? clamp(point.y - h / 2, h, document.device.height)
+    : clamp((document.device.height - h) / 2 + shift, h, document.device.height)
   addNode(screen.id, createNode('image', name, { x, y, w, h }, { asset, fill: false, ...extra }))
 }
 

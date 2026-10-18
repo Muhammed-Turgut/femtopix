@@ -1,7 +1,7 @@
 import type { ExportTarget, SceneNode } from '@/core/document/model'
 import type { PixelBuffer } from '@/core/render/pixel-buffer'
 
-export type BitmapFontId = '5x7' | '6x10' | '7x13' | '8x13' | '10x20' | '5x7x2' | '5x7x3'
+export type BitmapFontId = '3x5' | '4x6' | '5x7' | '6x10' | '7x13' | '8x13' | '10x20' | '5x7x2' | '5x7x3'
 
 export interface BitmapFont {
   id: BitmapFontId
@@ -15,10 +15,13 @@ export interface BitmapFont {
   oy: number
   ascent: number
   gfxSize: number
+  gfxFont?: string
   u8g2: string
 }
 
 export const BITMAP_FONTS: Record<BitmapFontId, BitmapFont> = {
+  '3x5': { id: '3x5', label: '3×5', cellW: 4, cellH: 6, glyphW: 3, glyphH: 5, scale: 1, ox: 0, oy: 0, ascent: 5, gfxSize: 1, gfxFont: 'Picopixel', u8g2: 'u8g2_font_micro_tr' },
+  '4x6': { id: '4x6', label: '4×6', cellW: 5, cellH: 7, glyphW: 4, glyphH: 6, scale: 1, ox: 0, oy: 0, ascent: 6, gfxSize: 1, gfxFont: 'TomThumb', u8g2: 'u8g2_font_tom_thumb_4x6_tr' },
   '5x7': { id: '5x7', label: '5×7', cellW: 6, cellH: 8, glyphW: 5, glyphH: 7, scale: 1, ox: 0, oy: 0, ascent: 7, gfxSize: 1, u8g2: 'u8g2_font_5x7_tr' },
   '6x10': { id: '6x10', label: '6×10', cellW: 6, cellH: 10, glyphW: 6, glyphH: 9, scale: 1, ox: 0, oy: 0, ascent: 8, gfxSize: 1, u8g2: 'u8g2_font_6x10_tr' },
   '7x13': { id: '7x13', label: '7×13', cellW: 7, cellH: 13, glyphW: 7, glyphH: 12, scale: 1, ox: 0, oy: 0, ascent: 11, gfxSize: 2, u8g2: 'u8g2_font_7x13_tr' },
@@ -61,9 +64,9 @@ export function defaultBitmapFont(library?: ExportTarget): BitmapFontId {
 
 export function fontsForLibrary(library?: ExportTarget): BitmapFont[] {
   if (library === 'adafruit_gfx' || library === 'tft_espi' || library === 'arduino_gfx') {
-    return [BITMAP_FONTS['5x7'], BITMAP_FONTS['5x7x2'], BITMAP_FONTS['5x7x3']]
+    return [BITMAP_FONTS['3x5'], BITMAP_FONTS['4x6'], BITMAP_FONTS['5x7'], BITMAP_FONTS['5x7x2'], BITMAP_FONTS['5x7x3']]
   }
-  return [BITMAP_FONTS['5x7'], BITMAP_FONTS['6x10'], BITMAP_FONTS['7x13'], BITMAP_FONTS['8x13'], BITMAP_FONTS['10x20']]
+  return [BITMAP_FONTS['3x5'], BITMAP_FONTS['4x6'], BITMAP_FONTS['5x7'], BITMAP_FONTS['6x10'], BITMAP_FONTS['7x13'], BITMAP_FONTS['8x13'], BITMAP_FONTS['10x20']]
 }
 
 export function measureText(text: string, fontId?: string): { w: number; h: number } {

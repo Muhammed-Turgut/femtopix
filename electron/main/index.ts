@@ -199,6 +199,16 @@ function createWindow(): BrowserWindow {
   })
 
   win.once('ready-to-show', () => win.show())
+  win.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return
+    const mod = input.control || input.meta
+    if (!mod || input.alt) return
+    const key = input.key.toLowerCase()
+    const detail = key === 'y' || (key === 'z' && input.shift) ? 'redo' : key === 'z' ? 'undo' : null
+    if (!detail) return
+    event.preventDefault()
+    win.webContents.send(`menu:${detail}`)
+  })
 
   if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
     void win.loadURL(process.env.ELECTRON_RENDERER_URL)
@@ -256,7 +266,8 @@ function buildMenu(): void {
 }
 
 function send(channel: string): void {
-  BrowserWindow.getFocusedWindow()?.webContents.send(channel)
+  const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+  win?.webContents.send(channel)
 }
 
 function registerIpc(): void {
