@@ -79,12 +79,19 @@ export interface SceneNode {
   points?: { x: number; y: number }[]
 }
 
+export interface ScreenFolder {
+  id: string
+  name: string
+  collapsed?: boolean
+}
+
 export interface Screen {
   id: string
   name: string
   cIdentifier: string
   x: number
   y: number
+  folderId?: string
   userCode: { prefix: string; suffix: string }
   children: SceneNode[]
 }
@@ -97,6 +104,7 @@ export interface IvecDocument {
   fonts: unknown[]
   assets: unknown[]
   components: unknown[]
+  folders: ScreenFolder[]
   screens: Screen[]
   loose: SceneNode[]
   export: {
@@ -179,6 +187,15 @@ const documentSchema = z.object({
   fonts: z.array(z.unknown()).default([]),
   assets: z.array(z.unknown()).default([]),
   components: z.array(z.unknown()).default([]),
+  folders: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        collapsed: z.boolean().optional()
+      })
+    )
+    .default([]),
   screens: z
     .array(
       z.object({
@@ -187,6 +204,7 @@ const documentSchema = z.object({
         cIdentifier: z.string(),
         x: z.number(),
         y: z.number(),
+        folderId: z.string().optional(),
         userCode: z.object({ prefix: z.string(), suffix: z.string() }).default({ prefix: '', suffix: '' }),
         children: z.array(nodeSchema).default([])
       })
@@ -312,6 +330,7 @@ export function createEmptyDocument(options: {
     fonts: [],
     assets: [],
     components: [],
+    folders: [],
     screens: [
       {
         id: 's1',
@@ -371,7 +390,11 @@ export function parseDocument(raw: string): IvecDocument {
   if (!parsed.success) {
     throw new Error('invalid_schema')
   }
-  for (const screen of parsed.data.screens) normalizeTextNodes(screen.children, parsed.data.device.library)
+  const folderIds = new Set(parsed.data.folders.map((folder) => folder.id))
+  for (const screen of parsed.data.screens) {
+    normalizeTextNodes(screen.children, parsed.data.device.library)
+    if (screen.folderId && !folderIds.has(screen.folderId)) delete screen.folderId
+  }
   return parsed.data
 }
 

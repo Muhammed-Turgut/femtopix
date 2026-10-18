@@ -42,6 +42,57 @@ export function renameScreen(id: string, name: string): void {
   })
 }
 
+export function addFolder(): string {
+  const locale = useAppStore.getState().locale
+  const base = locale === 'en' ? 'Folder' : 'Klasör'
+  const id = nextId('f')
+  patchDocument((document) => {
+    if (!document.folders) document.folders = []
+    const name = uniqueScreenName(base, document.folders.map((folder) => folder.name))
+    document.folders.push({ id, name, collapsed: false })
+  })
+  return id
+}
+
+export function renameFolder(id: string, name: string): void {
+  patchDocument((document) => {
+    const folder = document.folders?.find((item) => item.id === id)
+    if (folder) folder.name = name
+  })
+}
+
+export function toggleFolder(id: string): void {
+  patchDocument((document) => {
+    const folder = document.folders?.find((item) => item.id === id)
+    if (folder) folder.collapsed = !folder.collapsed
+  }, { record: false })
+}
+
+export function removeFolder(id: string): void {
+  patchDocument((document) => {
+    document.folders = (document.folders ?? []).filter((folder) => folder.id !== id)
+    for (const screen of document.screens) {
+      if (screen.folderId === id) delete screen.folderId
+    }
+  })
+}
+
+export function setScreenFolder(screenId: string, folderId: string | null): void {
+  patchDocument((document) => {
+    const screen = document.screens.find((item) => item.id === screenId)
+    if (!screen) return
+    const folders = document.folders ?? []
+    if (folderId && !folders.some((folder) => folder.id === folderId)) return
+    if (folderId) {
+      screen.folderId = folderId
+      const folder = folders.find((item) => item.id === folderId)
+      if (folder) folder.collapsed = false
+    } else {
+      delete screen.folderId
+    }
+  })
+}
+
 function nextId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
 }

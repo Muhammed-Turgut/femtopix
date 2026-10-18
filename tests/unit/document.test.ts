@@ -26,6 +26,21 @@ describe('document round-trip', () => {
     const again = parseDocument(serializeDocument(doc))
     expect(again.meta.name).toBe('gps-tracker')
     expect(again.screens).toHaveLength(1)
+    expect(again.folders).toEqual([])
+  })
+
+  it('keeps screen folders and drops a missing folder id', () => {
+    const doc = createEmptyDocument({ name: 'gps-tracker', profileId: 'ssd1306-128x64' })
+    doc.folders = [{ id: 'f1', name: 'Wifi', collapsed: true }]
+    doc.screens[0]!.folderId = 'f1'
+    const again = parseDocument(serializeDocument(doc))
+    expect(again.folders[0]?.name).toBe('Wifi')
+    expect(again.folders[0]?.collapsed).toBe(true)
+    expect(again.screens[0]?.folderId).toBe('f1')
+    doc.screens[0]!.folderId = 'missing'
+    doc.folders = []
+    const stripped = parseDocument(serializeDocument(doc))
+    expect(stripped.screens[0]?.folderId).toBeUndefined()
   })
 
   it('emits rounded-rect calls when a rect has a corner radius', () => {

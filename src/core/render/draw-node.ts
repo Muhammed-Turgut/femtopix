@@ -65,9 +65,10 @@ export function drawNode(buffer: PixelBuffer, node: SceneNode, bitmaps: Map<stri
     buffer.line(x0, y0, x1, y1, strokeInk)
     return
   }
-  if (node.type === 'ellipse') {
-    if (fill && fillInk !== null) buffer.ellipse(x, y, w, h, true, fillInk)
-    if (stroke && strokeInk !== null) buffer.ellipse(x, y, w, h, false, strokeInk)
+  if (node.type === 'ellipse' || node.type === 'arc') {
+    const keep = node.type === 'arc' ? arcQuadrant : undefined
+    if (fill && fillInk !== null) buffer.ellipse(x, y, w, h, true, fillInk, keep)
+    if (stroke && strokeInk !== null) buffer.ellipse(x, y, w, h, false, strokeInk, keep)
     return
   }
   if (node.type === 'triangle') {
@@ -99,6 +100,10 @@ export function drawNode(buffer: PixelBuffer, node: SceneNode, bitmaps: Map<stri
   }
   if (fill && fillInk !== null) buffer.fillRect(x, y, w, h, fillInk)
   if (stroke && strokeInk !== null) buffer.strokeRect(x, y, w, h, node.stroke || 1, strokeInk)
+}
+
+function arcQuadrant(px: number, py: number, cx: number, cy: number): boolean {
+  return !(px >= cx && py <= cy)
 }
 
 export function rgbaToMono(bytes: Uint8ClampedArray, width: number, height: number): MonoBitmap {

@@ -45,6 +45,30 @@ function i(value: number): number {
   return Math.round(value)
 }
 
+const ARC_OPTION = 'U8G2_DRAW_UPPER_LEFT | U8G2_DRAW_LOWER_LEFT | U8G2_DRAW_LOWER_RIGHT'
+
+function arcSegments(node: SceneNode): [number, number, number, number][] {
+  const w = Math.abs(node.w ?? 1)
+  const h = Math.abs(node.h ?? 1)
+  const rx = Math.max(1, Math.round(w / 2))
+  const ry = Math.max(1, Math.round(h / 2))
+  const cx = Math.round(node.x) + rx
+  const cy = Math.round(node.y) + ry
+  const steps = 16
+  const lines: [number, number, number, number][] = []
+  let prevX = cx + rx
+  let prevY = cy
+  for (let step = 1; step <= steps; step += 1) {
+    const rad = ((270 * step) / steps) * (Math.PI / 180)
+    const nextX = Math.round(cx + rx * Math.cos(rad))
+    const nextY = Math.round(cy + ry * Math.sin(rad))
+    lines.push([prevX, prevY, nextX, nextY])
+    prevX = nextX
+    prevY = nextY
+  }
+  return lines
+}
+
 function cString(value: string): string {
   return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
 }
@@ -126,18 +150,27 @@ function emitU8g2(node: SceneNode, flags: Flags): string[] {
     lines.push(`  u8g2.drawLine(${i(node.x)}, ${i(node.y)}, ${i(node.x + (node.w ?? 0))}, ${i(node.y + (node.h ?? 0))});`)
     return lines
   }
-  if (node.type === 'ellipse') {
+  if (node.type === 'ellipse' || node.type === 'arc') {
     const rx = Math.max(1, Math.round(w / 2))
     const ry = Math.max(1, Math.round(h / 2))
     const cx = x + rx
     const cy = y + ry
+    const option = node.type === 'arc' ? ARC_OPTION : 'U8G2_DRAW_ALL'
     if (fill) {
       setInk(fillInk)
-      lines.push(rx === ry ? `  u8g2.drawDisc(${cx}, ${cy}, ${rx});` : `  u8g2.drawFilledEllipse(${cx}, ${cy}, ${rx}, ${ry}, U8G2_DRAW_ALL);`)
+      lines.push(
+        node.type !== 'arc' && rx === ry
+          ? `  u8g2.drawDisc(${cx}, ${cy}, ${rx});`
+          : `  u8g2.drawFilledEllipse(${cx}, ${cy}, ${rx}, ${ry}, ${option});`
+      )
     }
     if (stroke) {
       setInk(strokeInk)
-      lines.push(rx === ry ? `  u8g2.drawCircle(${cx}, ${cy}, ${rx});` : `  u8g2.drawEllipse(${cx}, ${cy}, ${rx}, ${ry}, U8G2_DRAW_ALL);`)
+      lines.push(
+        node.type !== 'arc' && rx === ry
+          ? `  u8g2.drawCircle(${cx}, ${cy}, ${rx});`
+          : `  u8g2.drawEllipse(${cx}, ${cy}, ${rx}, ${ry}, ${option});`
+      )
     }
     return lines
   }
@@ -246,6 +279,12 @@ function emitGfx(node: SceneNode, flags: Flags, fillInk: string, strokeInk: stri
     }
     if (stroke) {
       lines.push(rx === ry ? `  d.drawCircle(${cx}, ${cy}, ${rx}, ${strokeInk});` : `  d.drawEllipse(${cx}, ${cy}, ${rx}, ${ry}, ${strokeInk});`)
+    }
+    return lines
+  }
+  if (node.type === 'arc') {
+    for (const [x0, y0, x1, y1] of arcSegments(node)) {
+      lines.push(`  d.drawLine(${x0}, ${y0}, ${x1}, ${y1}, ${stroke ? strokeInk : fillInk});`)
     }
     return lines
   }

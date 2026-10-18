@@ -1,15 +1,16 @@
-import { ChevronDown, Circle, Eraser, Hand, Hexagon, Images, Minus, MousePointer2, Pencil, Pipette, Square, Triangle, Type } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { ChevronDown, Circle, Eraser, Hand, Hexagon, Images, Minus, MousePointer2, Pencil, Pipette, Spline, Square, Triangle, Type } from 'lucide-react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore, type ToolId } from '@/store/app-store'
 import { IconButton, Kbd, Tooltip } from '@/ui/primitives'
 
-const SHAPES: { id: Extract<ToolId, 'rect' | 'ellipse' | 'line' | 'triangle' | 'polygon'>; icon: typeof Square; key: string }[] = [
+const SHAPES: { id: Extract<ToolId, 'rect' | 'ellipse' | 'line' | 'triangle' | 'polygon' | 'arc'>; icon: typeof Square; key: string }[] = [
   { id: 'rect', icon: Square, key: 'R' },
   { id: 'ellipse', icon: Circle, key: 'O' },
   { id: 'line', icon: Minus, key: 'L' },
   { id: 'triangle', icon: Triangle, key: 'Y' },
-  { id: 'polygon', icon: Hexagon, key: 'P' }
+  { id: 'polygon', icon: Hexagon, key: 'P' },
+  { id: 'arc', icon: Spline, key: 'A' }
 ]
 
 export function Toolbar() {
@@ -17,6 +18,9 @@ export function Toolbar() {
   const tool = useAppStore((s) => s.tool)
   const [shape, setShape] = useState<(typeof SHAPES)[number]['id']>('rect')
   const [open, setOpen] = useState(false)
+  useEffect(() => {
+    if (SHAPES.some((item) => item.id === tool)) setShape(tool)
+  }, [tool])
   const ShapeIcon = SHAPES.find((item) => item.id === shape)?.icon ?? Square
   const shapeActive = SHAPES.some((item) => item.id === tool)
 

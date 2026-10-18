@@ -85,6 +85,12 @@
     "galleryCreateShape": "Start with a shape",
     "galleryCreateShapeBody": "Opens the rectangle tool so you can block in a form, then refine it with the pencil.",
     "addScreen": "Add screen",
+    "addFolder": "Add folder",
+    "folder": "Folder",
+    "deleteFolder": "Delete folder",
+    "removeFromFolder": "Remove from folder",
+    "moveToFolder": "Move to folder",
+    "emptyFolder": "Drop screens here",
     "duplicateScreen": "Duplicate screen",
     "deleteScreen": "Delete screen",
     "duplicate": "Duplicate",
@@ -204,6 +210,7 @@
     "line": "Line",
     "triangle": "Triangle",
     "polygon": "Polygon",
+    "arc": "Arc",
     "eyedropper": "Eyedropper"
   },
   "window": {

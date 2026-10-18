@@ -85,6 +85,12 @@
     "galleryCreateShape": "Şekille başla",
     "galleryCreateShapeBody": "Dikdörtgen aracıyla boş bir form çiz, sonra kalemle detay ekle.",
     "addScreen": "Ekran ekle",
+    "addFolder": "Klasör ekle",
+    "folder": "Klasör",
+    "deleteFolder": "Klasörü sil",
+    "removeFromFolder": "Klasörden çıkar",
+    "moveToFolder": "Klasöre taşı",
+    "emptyFolder": "Ekranları buraya sürükle",
     "duplicateScreen": "Ekranı kopyala",
     "deleteScreen": "Ekranı sil",
     "duplicate": "Kopyasını oluştur",
@@ -204,6 +210,7 @@
     "line": "Çizgi",
     "triangle": "Üçgen",
     "polygon": "Çokgen",
+    "arc": "Yay",
     "eyedropper": "Damlalık"
   },
   "window": {

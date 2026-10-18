@@ -1,5 +1,5 @@
 import { Pencil, Square, Upload } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState, type UIEvent } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { loadAnimations, type GalleryAnimation } from '@/core/gallery/animations'
 import { filterGalleryIcons, isGallerySvg, loadGallery, type GalleryCategory } from '@/core/gallery/catalog'
@@ -11,7 +11,6 @@ import { Button, Input } from '@/ui/primitives'
 type GalleryTab = 'icons' | 'animations' | 'upload' | 'create'
 
 const SIZES = [16, 24, 32, 48] as const
-const ICON_PAGE = 96
 
 function categoryLabel(category: GalleryCategory, language: string): string {
   return language.startsWith('en') ? category.name.en : category.name.tr
@@ -27,14 +26,13 @@ export function GalleryPicker() {
   const [size, setSize] = useState<(typeof SIZES)[number]>(16)
   const [categoryId, setCategoryId] = useState<string | 'all' | null>(null)
   const [query, setQuery] = useState('')
-  const [iconLimit, setIconLimit] = useState(ICON_PAGE)
   const [iconsReady, setIconsReady] = useState(false)
   const [selectedAnimId, setSelectedAnimId] = useState<string | null>(null)
   const [placing, setPlacing] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const invert = theme === 'dark'
   const language = i18n.language
-  const pixelOff = useAppStore((s) => s.document?.device.preview.pixelOff) ?? '#3a3a3a'
+  const pixelOff = '#000000'
   const pixelOn = useAppStore((s) => s.document?.device.preview.pixelOn) ?? '#ffffff'
   const showIcons = categoryId !== null || query.trim().length > 0
 
@@ -55,7 +53,6 @@ export function GalleryPicker() {
   const selectedAnim = shownAnims.find((anim) => anim.id === selectedAnimId) ?? shownAnims[0] ?? null
 
   useEffect(() => {
-    setIconLimit(ICON_PAGE)
     if (!open || tab !== 'icons' || !showIcons) {
       setIconsReady(false)
       return
@@ -90,12 +87,6 @@ export function GalleryPicker() {
     } finally {
       setPlacing(false)
     }
-  }
-
-  const onIconScroll = (event: UIEvent<HTMLDivElement>) => {
-    const el = event.currentTarget
-    if (iconLimit >= icons.length) return
-    if (el.scrollTop + el.clientHeight > el.scrollHeight - 280) setIconLimit((value) => value + ICON_PAGE)
   }
 
   const readFile = (file: File) => {
@@ -155,7 +146,7 @@ export function GalleryPicker() {
                 </Chip>
               ))}
             </div>
-            <div className="min-h-0 flex-1 overflow-auto p-3" onScroll={onIconScroll}>
+            <div className="min-h-0 flex-1 overflow-y-auto p-3">
               {!showIcons ? (
                 <div className="grid h-full place-items-center px-6 text-center text-[12px] text-muted">{t('editor.galleryPickCategory')}</div>
               ) : !iconsReady ? (
@@ -164,13 +155,14 @@ export function GalleryPicker() {
                 <div className="grid h-full place-items-center text-[12px] text-muted">{t('editor.galleryEmptyCategory')}</div>
               ) : (
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(52px,1fr))] gap-1">
-                  {icons.slice(0, iconLimit).map((icon) => (
+                  {icons.map((icon) => (
                     <button
-                      key={`${icon.file}-${icon.url}`}
+                      key={icon.url}
                       type="button"
                       title={icon.name}
                       aria-label={icon.name}
                       className="grid aspect-square place-items-center rounded border border-transparent hover:border-line hover:bg-hover"
+                      style={{ contentVisibility: 'auto', containIntrinsicSize: '52px 52px' }}
                       onClick={() => {
                         if (!isGallerySvg(icon.file)) return
                         void place(icon.name, icon.url)
@@ -181,6 +173,7 @@ export function GalleryPicker() {
                         alt=""
                         width={32}
                         height={32}
+                        loading="lazy"
                         draggable={false}
                         className={`h-8 w-8 ${invert ? 'invert' : ''}`}
                         style={{ imageRendering: 'pixelated' }}

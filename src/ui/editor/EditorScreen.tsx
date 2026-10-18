@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Panel, PanelGroup } from 'react-resizable-panels'
 import { useAppStore } from '@/store/app-store'
-import { CanvasViewport, fitView } from '@/ui/editor/CanvasViewport'
+import { CanvasViewport, fitView, nextZoom } from '@/ui/editor/CanvasViewport'
 import { handleEditKey } from '@/ui/editor/edit-actions'
 import { CodePanel } from '@/ui/editor/CodePanel'
 import { GalleryPicker } from '@/ui/editor/GalleryPicker'
@@ -15,7 +15,7 @@ import { Toolbar } from '@/ui/editor/Toolbar'
 import { TopBar } from '@/ui/editor/TopBar'
 import { IconButton, Tooltip } from '@/ui/primitives'
 
-const ZOOM_PRESETS = [1, 2, 4, 6, 8, 12, 16]
+const ZOOM_PRESETS = [0.1, 0.25, 0.5, 1, 2, 4, 6, 8, 12, 16]
 
 export function EditorScreen({ onSave }: { onSave: () => void }) {
   const { t } = useTranslation()
@@ -62,7 +62,7 @@ export function EditorScreen({ onSave }: { onSave: () => void }) {
               <Toolbar />
               <div className="absolute right-3 bottom-3 z-10 flex items-center gap-1">
                 <div className="flex h-7 items-center rounded-md border border-line bg-panel">
-                  <IconButton onClick={() => useAppStore.getState().setZoom(zoom - 1)}>
+                  <IconButton onClick={() => useAppStore.getState().setZoom(nextZoom(zoom, -1))}>
                     <Minus size={16} strokeWidth={1.5} />
                   </IconButton>
                   <div className="relative">
@@ -71,7 +71,7 @@ export function EditorScreen({ onSave }: { onSave: () => void }) {
                       className="h-7 min-w-12 px-1 text-[12px] tabular-nums hover:bg-hover"
                       onClick={() => setZoomMenu((value) => !value)}
                     >
-                      {zoom * 100}%
+                      {Math.round(zoom * 100)}%
                     </button>
                     {zoomMenu ? (
                       <div
@@ -103,7 +103,7 @@ export function EditorScreen({ onSave }: { onSave: () => void }) {
                       </div>
                     ) : null}
                   </div>
-                  <IconButton onClick={() => useAppStore.getState().setZoom(zoom + 1)}>
+                  <IconButton onClick={() => useAppStore.getState().setZoom(nextZoom(zoom, 1))}>
                     <Plus size={16} strokeWidth={1.5} />
                   </IconButton>
                 </div>

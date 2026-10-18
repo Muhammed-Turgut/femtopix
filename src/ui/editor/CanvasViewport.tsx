@@ -21,10 +21,11 @@ import { DeviceRaster } from '@/ui/editor/DeviceRaster'
 import { GuideOverlay } from '@/ui/editor/GuideOverlay'
 import { LayerPreview } from '@/ui/editor/LayerPreview'
 
-const MIN_ZOOM = 1
+const MIN_ZOOM = 0.05
 const MAX_ZOOM = 64
-const DRAW_TOOLS = new Set<ToolId>(['rect', 'ellipse', 'line', 'triangle', 'polygon', 'text', 'pencil', 'eraser', 'image'])
-const SHAPE_TOOLS = new Set<ToolId>(['rect', 'ellipse', 'line', 'triangle', 'polygon'])
+const ZOOM_STOPS = [0.05, 0.1, 0.25, 0.5, 1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64]
+const DRAW_TOOLS = new Set<ToolId>(['rect', 'ellipse', 'line', 'triangle', 'polygon', 'arc', 'text', 'pencil', 'eraser', 'image'])
+const SHAPE_TOOLS = new Set<ToolId>(['rect', 'ellipse', 'line', 'triangle', 'polygon', 'arc'])
 const TOOL_KEYS: Record<string, ToolId> = {
   v: 'select',
   h: 'hand',
@@ -33,6 +34,7 @@ const TOOL_KEYS: Record<string, ToolId> = {
   l: 'line',
   y: 'triangle',
   p: 'polygon',
+  a: 'arc',
   t: 'text',
   b: 'pencil',
   e: 'eraser',
@@ -41,11 +43,12 @@ const TOOL_KEYS: Record<string, ToolId> = {
 }
 
 function clampZoom(value: number): number {
-  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(value)))
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(value * 100) / 100))
 }
 
-function nextZoom(current: number, direction: 1 | -1): number {
-  return clampZoom(current + direction)
+export function nextZoom(current: number, direction: 1 | -1): number {
+  if (direction > 0) return ZOOM_STOPS.find((stop) => stop > current + 0.001) ?? MAX_ZOOM
+  return [...ZOOM_STOPS].reverse().find((stop) => stop < current - 0.001) ?? MIN_ZOOM
 }
 
 function clientToDevice(
@@ -99,6 +102,7 @@ export const CanvasViewport = forwardRef<HTMLDivElement>(function CanvasViewport
   const [draft, setDraft] = useState<SceneNode | null>(null)
   const [guides, setGuides] = useState<GuideLine[]>([])
   const [placing, setPlacing] = useState(false)
+  const [screenPick, setScreenPick] = useState<string[]>([])
   const drag = useRef<{ kind: 'pan'; lastX: number; lastY: number } | null>(null)
   const screenDrag = useRef<{
     id: string
@@ -145,12 +149,12 @@ export const CanvasViewport = forwardRef<HTMLDivElement>(function CanvasViewport
       if ((event.ctrlKey || event.metaKey) && (event.key === '=' || event.key === '+')) {
         event.preventDefault()
         const zoom = useAppStore.getState().document?.ui.zoom ?? 6
-        useAppStore.getState().setZoom(zoom + 1)
+        useAppStore.getState().setZoom(nextZoom(zoom, 1))
       }
       if ((event.ctrlKey || event.metaKey) && (event.key === '-' || event.key === '_')) {
         event.preventDefault()
         const zoom = useAppStore.getState().document?.ui.zoom ?? 6
-        useAppStore.getState().setZoom(zoom - 1)
+        useAppStore.getState().setZoom(nextZoom(zoom, -1))
       }
     }
     const onKeyUp = (event: KeyboardEvent) => {
@@ -191,12 +195,9 @@ export const CanvasViewport = forwardRef<HTMLDivElement>(function CanvasViewport
         store.nudgePan(0, -deltaY)
         return
       }
-      if (Math.abs(deltaX) > Math.abs(deltaY)) {
-        store.nudgePan(-deltaX, 0)
-        return
-      }
 
-      const direction: 1 | -1 = deltaY < 0 ? 1 : -1
+      const delta = Math.abs(deltaX) > Math.abs(deltaY) ? deltaX : deltaY
+      const direction: 1 | -1 = delta < 0 ? 1 : -1
       const oldZoom = current.ui.zoom
       const newZoom = nextZoom(oldZoom, direction)
       if (newZoom === oldZoom) return
@@ -247,24 +248,43 @@ export const CanvasViewport = forwardRef<HTMLDivElement>(function CanvasViewport
     setPanning(true)
   }
 
-  const beginScreenDrag = (
-    event: React.PointerEvent<HTMLDivElement>,
-    screenId: string,
-    originX: number,
-    originY: number
-  ) => {
+  const pickScreen = (event: React.PointerEvent<HTMLDivElement>, screenId: string) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const additive = event.shiftKey || event.ctrlKey || event.metaKey
+    setScreenPick((current) => {
+      if (!additive) return [screenId]
+      return current.includes(screenId) ? current.filter((id) => id !== screenId) : [...current, screenId]
+    })
+    setSelectedIds([])
+    useAppStore.getState().setActiveScreen(screenId)
+  }
+
+  const beginScreenDrag = (event: React.PointerEvent<HTMLDivElement>, screenId: string) => {
+    if (event.button === 2) {
+      pickScreen(event, screenId)
+      return
+    }
     if (event.button !== 0 || canPanTool || event.altKey) return
     if (editing === screenId) return
     event.stopPropagation()
-    event.preventDefault()
+    const already = useAppStore.getState().activeScreenId === screenId || screenPick.includes(screenId)
     useAppStore.getState().setActiveScreen(screenId)
+    if (!already) return
+    event.preventDefault()
+    const doc = useAppStore.getState().document
+    const moving = screenPick.includes(screenId) ? screenPick : [screenId]
+    const ids = moving.filter((id) => doc?.screens.some((screen) => screen.id === id))
+    const origins = new Map(
+      (doc?.screens ?? []).filter((screen) => ids.includes(screen.id)).map((screen) => [screen.id, { x: screen.x, y: screen.y }])
+    )
     stopScreenDrag.current?.()
     screenDrag.current = {
       id: screenId,
       startX: event.clientX,
       startY: event.clientY,
-      originX,
-      originY,
+      originX: origins.get(screenId)?.x ?? 0,
+      originY: origins.get(screenId)?.y ?? 0,
       moved: false
     }
 
@@ -279,7 +299,9 @@ export const CanvasViewport = forwardRef<HTMLDivElement>(function CanvasViewport
         useAppStore.getState().pushHistory()
       }
       const zoomNow = useAppStore.getState().document?.ui.zoom ?? 1
-      useAppStore.getState().moveScreen(active.id, active.originX + dx / zoomNow, active.originY + dy / zoomNow, false)
+      for (const [id, origin] of origins) {
+        useAppStore.getState().moveScreen(id, origin.x + dx / zoomNow, origin.y + dy / zoomNow, false)
+      }
     }
     const onUp = () => {
       window.removeEventListener('pointermove', onMove)
@@ -410,17 +432,33 @@ export const CanvasViewport = forwardRef<HTMLDivElement>(function CanvasViewport
   }
 
   const beginNodeDrag = (event: React.PointerEvent<HTMLDivElement>, screenId: string, node: SceneNode) => {
+    if (event.button === 2) {
+      event.preventDefault()
+      event.stopPropagation()
+      useAppStore.getState().setActiveScreen(screenId)
+      const additive = event.shiftKey || event.ctrlKey || event.metaKey
+      const next = additive
+        ? selectedIds.includes(node.id)
+          ? selectedIds.filter((id) => id !== node.id)
+          : [...selectedIds, node.id]
+        : [node.id]
+      setSelectedIds(next)
+      setScreenPick([])
+      return
+    }
     if (event.button !== 0 || canPanTool || DRAW_TOOLS.has(tool)) return
     event.stopPropagation()
     event.preventDefault()
     useAppStore.getState().setActiveScreen(screenId)
-    const next = event.shiftKey || event.ctrlKey || event.metaKey
+    const additive = event.shiftKey || event.ctrlKey || event.metaKey
+    const next = additive
       ? selectedIds.includes(node.id)
         ? selectedIds.filter((id) => id !== node.id)
         : [...selectedIds, node.id]
       : [node.id]
     setSelectedIds(next)
-    if (node.locked) return
+    setScreenPick([])
+    if (node.locked || (additive && !next.includes(node.id))) return
     const startX = event.clientX
     const startY = event.clientY
     const originX = node.x
@@ -477,8 +515,7 @@ export const CanvasViewport = forwardRef<HTMLDivElement>(function CanvasViewport
       frame.right - event.clientX < edge ||
       frame.bottom - event.clientY < edge
     if (nearResize) return
-    if (event.button === 1 || event.altKey || canPanTool || event.button === 0) {
-      if (DRAW_TOOLS.has(tool) && event.button === 0 && !canPanTool && !event.altKey) return
+    if (event.button === 1 || event.altKey || canPanTool) {
       beginPan(event)
     }
   }
@@ -521,6 +558,7 @@ export const CanvasViewport = forwardRef<HTMLDivElement>(function CanvasViewport
       >
         {document.screens.map((screen) => {
           const active = screen.id === activeScreenId
+          const picked = screenPick.includes(screen.id)
           const width = document.device.width * zoom
           const height = document.device.height * zoom
           return (
@@ -538,9 +576,14 @@ export const CanvasViewport = forwardRef<HTMLDivElement>(function CanvasViewport
                 transform: 'translate(-50%, -50%)'
               }}
               onPointerDown={(event) => {
+                if (event.button === 2) {
+                  if (event.target instanceof HTMLElement && event.target.closest('[data-node-id]')) return
+                  pickScreen(event, screen.id)
+                  return
+                }
                 if (DRAW_TOOLS.has(tool) && !canPanTool) return
                 if (event.target instanceof HTMLElement && event.target.closest('[data-node-id]')) return
-                beginScreenDrag(event, screen.id, screen.x, screen.y)
+                beginScreenDrag(event, screen.id)
               }}
             >
               <div
@@ -572,8 +615,8 @@ export const CanvasViewport = forwardRef<HTMLDivElement>(function CanvasViewport
               <div
                 className="relative h-full w-full overflow-hidden"
                 style={{
-                  background: document.device.preview.pixelOff,
-                  outline: active ? '2px solid var(--accent)' : '1px solid var(--border-strong)',
+                  background: 'var(--bg-screen)',
+                  outline: picked ? '2px solid var(--accent)' : active ? '1px solid var(--accent)' : '1px solid var(--border-strong)',
                   outlineOffset: 0
                 }}
                 onPointerDown={(event) => beginDraw(event, screen.id, event.currentTarget)}
@@ -635,8 +678,24 @@ export function fitView(viewport: HTMLDivElement | null): void {
   const store = useAppStore.getState()
   const document = store.document
   if (!document || !viewport) return
-  const pad = 96
-  const zx = (viewport.clientWidth - pad) / document.device.width
-  const zy = (viewport.clientHeight - pad) / document.device.height
-  store.setView(clampZoom(Math.min(zx, zy)), [0, 0])
+  const pad = 80
+  const w = document.device.width
+  const h = document.device.height
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  for (const screen of document.screens) {
+    minX = Math.min(minX, screen.x - w / 2)
+    minY = Math.min(minY, screen.y - h / 2)
+    maxX = Math.max(maxX, screen.x + w / 2)
+    maxY = Math.max(maxY, screen.y + h / 2)
+  }
+  if (!Number.isFinite(minX)) return
+  const zoom = clampZoom(
+    Math.min((viewport.clientWidth - pad) / Math.max(1, maxX - minX), (viewport.clientHeight - pad) / Math.max(1, maxY - minY))
+  )
+  const cx = (minX + maxX) / 2
+  const cy = (minY + maxY) / 2
+  store.setView(zoom, [-cx * zoom, -cy * zoom])
 }

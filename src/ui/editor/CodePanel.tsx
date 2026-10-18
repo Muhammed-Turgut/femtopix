@@ -93,14 +93,15 @@ export function CodePanel() {
   return (
     <div className="flex h-full min-h-[120px] bg-panel">
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex h-9 items-center justify-between border-b border-line pr-2">
+        <div className="flex h-9 min-w-0 items-center gap-2 overflow-hidden border-b border-line pr-2">
           <Tabs
             flush
+            scroll
             value={screen.id}
             onChange={(id) => useAppStore.getState().setActiveScreen(id)}
             options={project.screens.map((item) => ({ id: item.id, label: item.name }))}
           />
-          <div className="flex items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1">
             {copied ? (
               <span className="flex items-center gap-1 text-[12px] text-mint">
                 <Check size={16} strokeWidth={1.5} />

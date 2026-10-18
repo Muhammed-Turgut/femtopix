@@ -13,18 +13,19 @@ function categoryLabel(category: GalleryCategory, language: string): string {
 export function GalleryPanel() {
   const { t, i18n } = useTranslation()
   const categories = useMemo(() => loadGallery(), [])
+  const allIcons = useMemo(() => categories.flatMap((category) => category.icons), [categories])
   const [activeId, setActiveId] = useState<string | null>(categories.length === 1 ? categories[0].id : null)
   const [query, setQuery] = useState('')
   const needle = query.trim().toLocaleLowerCase('tr')
-  const active = categories.find((category) => category.id === activeId) ?? null
+  const showingAll = activeId === 'all'
+  const active = showingAll ? null : categories.find((category) => category.id === activeId) ?? null
   const visibleCategories = needle
     ? categories.filter((category) => categoryLabel(category, i18n.language).toLocaleLowerCase('tr').includes(needle))
     : categories
-  const visibleIcons = active
-    ? needle
-      ? active.icons.filter((icon) => icon.name.toLocaleLowerCase('tr').includes(needle) || icon.file.toLocaleLowerCase('tr').includes(needle))
-      : active.icons
-    : []
+  const iconSource = showingAll ? allIcons : active?.icons ?? []
+  const visibleIcons = needle
+    ? iconSource.filter((icon) => icon.name.toLocaleLowerCase('tr').includes(needle) || icon.file.toLocaleLowerCase('tr').includes(needle))
+    : iconSource
 
   const openPicker = (
     <div className="border-b border-line p-2">
@@ -48,14 +49,25 @@ export function GalleryPanel() {
     )
   }
 
-  if (!active) {
+  if (!active && !showingAll) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
         {openPicker}
         <div className="border-b border-line p-2">
           <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('editor.gallerySearch')} />
         </div>
-        <div className="min-h-0 flex-1 overflow-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto">
+        <button
+          type="button"
+          onClick={() => {
+            setQuery('')
+            setActiveId('all')
+          }}
+          className="flex h-8 w-full items-center justify-between px-3 text-left hover:bg-hover"
+        >
+          <span className="truncate text-[12px]">{t('editor.galleryAll')}</span>
+          <span className="text-[11px] text-muted tabular-nums">{allIcons.length}</span>
+        </button>
         {visibleCategories.map((category) => (
           <button
             key={category.id}
@@ -88,7 +100,9 @@ export function GalleryPanel() {
         >
           <ChevronLeft size={16} strokeWidth={1.5} />
         </IconButton>
-        <span className="min-w-0 flex-1 truncate text-[12px] font-semibold">{categoryLabel(active, i18n.language)}</span>
+        <span className="min-w-0 flex-1 truncate text-[12px] font-semibold">
+          {showingAll ? t('editor.galleryAll') : categoryLabel(active!, i18n.language)}
+        </span>
         <span className="pr-2 text-[11px] text-muted tabular-nums">{visibleIcons.length}</span>
       </div>
       <div className="border-b border-line p-2">
@@ -97,14 +111,16 @@ export function GalleryPanel() {
       {visibleIcons.length === 0 ? (
         <EmptyState icon={Images} title={t('editor.galleryEmptyCategory')} body={t('editor.galleryEmptyBody')} />
       ) : (
-        <div className="grid min-h-0 flex-1 auto-rows-min grid-cols-4 content-start gap-1 overflow-auto p-2">
+        <div className="min-h-0 flex-1 overflow-y-auto p-2">
+          <div className="grid grid-cols-4 content-start gap-1">
           {visibleIcons.map((icon) => (
             <button
-              key={icon.file}
+              key={icon.url}
               type="button"
               title={icon.name}
               aria-label={icon.name}
               className="grid aspect-square place-items-center rounded border border-line bg-elevated hover:bg-hover"
+              style={{ contentVisibility: 'auto', containIntrinsicSize: '48px 48px' }}
               onClick={() => {
                 if (!isGallerySvg(icon.file)) return
                 void assetFromUrl(icon.url).then((asset) => placeImageOnActiveScreen(icon.name, asset))
@@ -115,12 +131,14 @@ export function GalleryPanel() {
                 alt=""
                 width={32}
                 height={32}
+                loading="lazy"
                 draggable={false}
                 className="h-8 w-8"
                 style={{ imageRendering: 'pixelated' }}
               />
             </button>
           ))}
+          </div>
         </div>
       )}
     </div>

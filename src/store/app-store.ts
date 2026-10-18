@@ -23,6 +23,10 @@ export type LeftTab = 'layers' | 'screens' | 'assets' | 'components' | 'gallery'
 export type Route = 'home' | 'editor'
 export type BusyKind = 'creating' | 'opening' | null
 
+function clampEditorZoom(zoom: number): number {
+  return Math.min(64, Math.max(0.05, Math.round(zoom * 100) / 100))
+}
+
 interface Toast {
   id: number
   message: string
@@ -85,7 +89,7 @@ interface AppActions {
   setTool: (tool: ToolId) => void
   setLeftTab: (tab: LeftTab) => void
   setActiveScreen: (id: string | null) => void
-  addScreen: () => void
+  addScreen: (folderId?: string | null) => void
   setZoom: (zoom: number) => void
   setPan: (x: number, y: number) => void
   nudgePan: (dx: number, dy: number) => void
@@ -309,13 +313,16 @@ export const useAppStore = create<AppState & AppActions>()(
       })
     },
 
-    addScreen: () => {
+    addScreen: (folderId) => {
       get().pushHistory()
       set((state) => {
         if (!state.document) return
         const index = state.document.screens.length + 1
         const used = new Set(state.document.screens.map((item) => item.cIdentifier))
         const name = `Screen ${index}`
+        const active = state.document.screens.find((item) => item.id === state.activeScreenId)
+        const requested = folderId === undefined ? active?.folderId : folderId || undefined
+        const folders = state.document.folders ?? []
         const screen: Screen = {
           id: `s${index}_${Date.now()}`,
           name,
@@ -325,6 +332,9 @@ export const useAppStore = create<AppState & AppActions>()(
           userCode: { prefix: '', suffix: '' },
           children: []
         }
+        if (requested && folders.some((folder) => folder.id === requested)) screen.folderId = requested
+        const folder = folders.find((item) => item.id === screen.folderId)
+        if (folder) folder.collapsed = false
         state.document.screens.push(screen)
         state.activeScreenId = screen.id
         state.dirty = true
@@ -334,7 +344,7 @@ export const useAppStore = create<AppState & AppActions>()(
     setZoom: (zoom) =>
       set((state) => {
         if (!state.document) return
-        state.document.ui.zoom = Math.min(64, Math.max(1, Math.round(zoom)))
+        state.document.ui.zoom = clampEditorZoom(zoom)
       }),
 
     setPan: (x, y) =>
@@ -352,7 +362,7 @@ export const useAppStore = create<AppState & AppActions>()(
     setView: (zoom, pan) =>
       set((state) => {
         if (!state.document) return
-        state.document.ui.zoom = Math.min(64, Math.max(1, zoom))
+        state.document.ui.zoom = clampEditorZoom(zoom)
         state.document.ui.pan = pan
       }),
 
