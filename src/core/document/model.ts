@@ -93,6 +93,8 @@ export interface Screen {
   y: number
   folderId?: string
   userCode: { prefix: string; suffix: string }
+  /** Hand-edited code plus the generated code it was edited from, so canvas changes can be merged in. */
+  codeOverride?: { code: string; base: string }
   children: SceneNode[]
 }
 
@@ -206,6 +208,7 @@ const documentSchema = z.object({
         y: z.number(),
         folderId: z.string().optional(),
         userCode: z.object({ prefix: z.string(), suffix: z.string() }).default({ prefix: '', suffix: '' }),
+        codeOverride: z.object({ code: z.string(), base: z.string() }).optional(),
         children: z.array(nodeSchema).default([])
       })
     )

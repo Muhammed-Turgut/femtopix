@@ -1,11 +1,12 @@
-import { Check, Copy, Download } from 'lucide-react'
+import { Check, Copy, Download, RotateCcw } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { SceneNode } from '@/core/document/model'
 import { placeholderCode, toCIdentifier } from '@/core/document/model'
+import { mergeCode } from '@/core/export/merge-code'
 import { nodeBounds } from '@/core/render/raster-node'
 import { currentScreen, useAppStore } from '@/store/app-store'
-import { downloadShapeHeader, exportIconHeaders, isAnimationNode, isIconNode, setExportFlag } from '@/ui/editor/document-actions'
+import { downloadShapeHeader, exportIconHeaders, isAnimationNode, isIconNode, setCodeOverride, setExportFlag } from '@/ui/editor/document-actions'
 import { NodeThumb } from '@/ui/editor/NodeThumb'
 import { Button, CodeView, Switch, Tabs } from '@/ui/primitives'
 
@@ -59,10 +60,16 @@ export function CodePanel() {
         .join('|')
     : ''
   const exportKey = project ? JSON.stringify(project.export) : ''
-  const code = useMemo(
+  const generated = useMemo(
     () => (project && screen ? placeholderCode(project, screen) : ''),
     [project, screen, layersKey, exportKey]
   )
+  const override = screen?.codeOverride
+  const merged = useMemo(
+    () => (override ? mergeCode(override.base, override.code, generated) : { code: generated, conflict: false }),
+    [override, generated]
+  )
+  const code = merged.code
 
   if (!project || !screen) return null
 
@@ -118,8 +125,19 @@ export function CodePanel() {
             </Button>
           </div>
         </div>
+        {override ? (
+          <div
+            className={`flex h-7 shrink-0 items-center gap-2 border-b border-line px-2 text-[11px] ${merged.conflict ? 'text-warning' : 'text-muted'}`}
+          >
+            <span className="min-w-0 flex-1 truncate">{merged.conflict ? t('editor.codeConflict') : t('editor.codeEdited')}</span>
+            <Button tone="ghost" onClick={() => setCodeOverride(screen.id, null, generated)}>
+              <RotateCcw size={14} strokeWidth={1.5} />
+              {t('editor.codeReset')}
+            </Button>
+          </div>
+        ) : null}
         <div className="min-h-0 flex-1 p-2">
-          <CodeView value={code} />
+          <CodeView key={screen.id} value={code} onCommit={(text) => setCodeOverride(screen.id, text, generated)} />
         </div>
       </div>
       <aside className="flex w-64 shrink-0 flex-col border-l border-line">

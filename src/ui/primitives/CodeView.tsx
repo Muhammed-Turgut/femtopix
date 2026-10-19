@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from 'react'
+
 const KEYWORDS = new Set([
   'void',
   'int',
@@ -125,9 +127,69 @@ function highlight(line: string) {
   )
 }
 
-export function CodeView({ value }: { value: string }) {
-  const lines = value.split('\n')
+export function CodeView({ value, onCommit }: { value: string; onCommit?: (value: string) => void }) {
+  const [draft, setDraft] = useState(value)
+  const [focused, setFocused] = useState(false)
+  const draftRef = useRef(draft)
 
+  useEffect(() => {
+    if (focused) return
+    draftRef.current = value
+    setDraft(value)
+  }, [value, focused])
+
+  if (onCommit) {
+    const lines = draft.split('\n')
+    const update = (text: string) => {
+      draftRef.current = text
+      setDraft(text)
+    }
+    return (
+      <div className="scrollbar-thin h-full overflow-auto bg-input font-mono text-[12px] leading-[18px] text-ink">
+        <div className="flex min-h-full min-w-max">
+          <div className="w-10 shrink-0 select-none pr-3 text-right text-muted tabular-nums">
+            {lines.map((_, index) => (
+              <div key={index}>{index + 1}</div>
+            ))}
+          </div>
+          <div className="relative min-w-0 flex-1 pr-4">
+            <div aria-hidden className="pointer-events-none whitespace-pre">
+              {lines.map((line, index) => (
+                <div key={index}>{highlight(line)}</div>
+              ))}
+              <div> </div>
+            </div>
+            <textarea
+              className="absolute inset-0 h-full w-full resize-none overflow-hidden whitespace-pre bg-transparent p-0 font-mono text-[12px] leading-[18px] text-transparent caret-ink outline-none selection:bg-accent/30 selection:text-transparent"
+              wrap="off"
+              spellCheck={false}
+              value={draft}
+              onFocus={() => setFocused(true)}
+              onChange={(event) => update(event.target.value)}
+              onBlur={() => {
+                setFocused(false)
+                if (draftRef.current !== value) onCommit(draftRef.current)
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== 'Tab') return
+                event.preventDefault()
+                const el = event.currentTarget
+                const start = el.selectionStart
+                const text = draftRef.current
+                update(`${text.slice(0, start)}  ${text.slice(el.selectionEnd)}`)
+                requestAnimationFrame(() => {
+                  el.selectionStart = start + 2
+                  el.selectionEnd = start + 2
+                })
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const lines = value.split('\n')
   return (
     <div className="scrollbar-thin h-full overflow-auto bg-input font-mono text-[12px] leading-[18px] text-ink">
       <table className="w-full border-collapse">

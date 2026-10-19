@@ -240,6 +240,13 @@ describe('document round-trip', () => {
     expect(code).toContain('d.setCursor(2, 10);')
   })
 
+  it('saves hand-edited code with the project', () => {
+    const doc = createEmptyDocument({ name: 'tft', profileId: 'st7789-240x240' })
+    doc.screens[0]!.codeOverride = { code: 'edited', base: 'generated' }
+    const again = parseDocument(serializeDocument(doc))
+    expect(again.screens[0]?.codeOverride).toEqual({ code: 'edited', base: 'generated' })
+  })
+
   it('emits drawPixel calls for a paint stroke', () => {
     const doc = createEmptyDocument({ name: 'oled', profileId: 'ssd1306-128x64' })
     doc.screens[0]?.children.push({

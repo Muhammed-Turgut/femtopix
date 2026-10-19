@@ -112,6 +112,7 @@ function redoDocument(): void {
 }
 
 export function runEditCommand(command: 'undo' | 'redo' | 'copy' | 'cut' | 'paste' | 'selectAll'): void {
+  if ((command === 'undo' || command === 'redo') && document.activeElement instanceof HTMLTextAreaElement) return
   if (command === 'undo') {
     undoDocument()
     return
@@ -146,6 +147,7 @@ export function handleEditKey(event: KeyboardEvent): boolean {
   const mod = event.ctrlKey || event.metaKey
   const key = event.key.toLowerCase()
   if (mod && (key === 'z' || key === 'y')) {
+    if (event.target instanceof HTMLTextAreaElement) return false
     event.preventDefault()
     if (key === 'y' || event.shiftKey) redoDocument()
     else undoDocument()

@@ -35,6 +35,15 @@ export function renameProject(name: string): void {
   })
 }
 
+export function setCodeOverride(screenId: string, code: string | null, generated: string): void {
+  patchDocument((document) => {
+    const screen = document.screens.find((item) => item.id === screenId)
+    if (!screen) return
+    if (code === null || code === generated) delete screen.codeOverride
+    else screen.codeOverride = { code, base: generated }
+  })
+}
+
 export function renameScreen(id: string, name: string): void {
   patchDocument((document) => {
     const screen = document.screens.find((item) => item.id === id)

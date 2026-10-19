@@ -199,14 +199,13 @@ function createWindow(): BrowserWindow {
   })
 
   win.once('ready-to-show', () => win.show())
-  win.webContents.on('before-input-event', (event, input) => {
+  win.webContents.on('before-input-event', (_event, input) => {
     if (input.type !== 'keyDown') return
     const mod = input.control || input.meta
     if (!mod || input.alt) return
     const key = input.key.toLowerCase()
     const detail = key === 'y' || (key === 'z' && input.shift) ? 'redo' : key === 'z' ? 'undo' : null
     if (!detail) return
-    event.preventDefault()
     win.webContents.send(`menu:${detail}`)
   })
 
